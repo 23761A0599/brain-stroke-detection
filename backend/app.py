@@ -1,7 +1,6 @@
 import os
 import io
 import torch
-import torch.nn as nn
 from torchvision import transforms
 from PIL import Image
 from flask import Flask, request, jsonify
@@ -18,21 +17,20 @@ MODEL_DIR = os.path.join(BASE_DIR, "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "best_efficientnetb0.pth")
 
 # Google Drive File ID for best_efficientnetb0.pth
-# Example link: https://drive.google.com/file/d/1ABC123xyz/view -> ID is 1ABC123xyz
 GDRIVE_FILE_ID = "YOUR_GOOGLE_DRIVE_FILE_ID"
 
 def ensure_model_downloaded():
     """Downloads model weights if missing or if file is an LFS pointer (<1MB)."""
     os.makedirs(MODEL_DIR, exist_ok=True)
     if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 1000000:
-        print("Model file missing or invalid LFS pointer. Downloading full weights...")
+        print("Downloading model weights from Google Drive...")
         url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
         gdown.download(url, MODEL_PATH, quiet=False)
 
-# Auto-download model weights before loading
+# Auto-download model weights on server start
 ensure_model_downloaded()
 
-# Load Model Function
+# Load Model
 def load_model():
     model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=2)
     state_dict = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
@@ -47,7 +45,7 @@ except Exception as e:
     print(f"Error loading model: {e}")
     model = None
 
-# Image Transforms
+# Transformations for MRI input
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -63,13 +61,13 @@ CLASSES = ["Non-Hemorrhagic", "Hemorrhagic"]
 def predict():
     if model is None:
         return jsonify({
-            "error": "Model File Missing On Server",
-            "prediction": "Model File Missing On Server",
+            "error": "Model failed to load on server.",
+            "prediction": "Error",
             "confidence": 0.0
         }), 500
 
     if "file" not in request.files:
-        return jsonify({"error": "No image uploaded"}), 400
+        return jsonify({"error": "No image file provided"}), 400
 
     file = request.files["file"]
     
@@ -95,5 +93,5 @@ def predict():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
