@@ -1,7 +1,8 @@
 import axios from "axios";
 
+// Updated baseURL to point to your live Render backend
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000",
+    baseURL: "https://brain-hemorrhage-backend.onrender.com",
 });
 
 export const predictImage = async (imageFile) => {
