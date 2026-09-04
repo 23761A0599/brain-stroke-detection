@@ -1,0 +1,6 @@
+class,precision,recall,f1-score,support
+Hemorrhagic,0.6471,0.6377,0.6423,69
+NonHemorrhagic,0.8677,0.8723,0.87,188
+accuracy,,,0.8093,257
+macro avg,0.7574,0.755,0.7562,257
+weighted avg,0.8085,0.8093,0.8089,257

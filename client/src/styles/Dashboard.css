@@ -1,0 +1,23 @@
+.dashboard-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:25px;
+    align-items:start;
+    margin-top:30px;
+}
+
+.full-width{
+    grid-column:1/-1;
+}
+
+@media(max-width:1000px){
+
+.dashboard-grid{
+    grid-template-columns:1fr;
+}
+
+.full-width{
+    grid-column:auto;
+}
+
+}

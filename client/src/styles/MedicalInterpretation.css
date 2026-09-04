@@ -1,0 +1,31 @@
+.medical-card{
+    width:100%;
+    margin:35px auto;
+    background:white;
+    border-radius:18px;
+    padding:35px;
+    box-shadow:0 10px 30px rgba(0,0,0,.08);
+    border:1px solid #e5e7eb;
+}
+
+.medical-card h2{
+    text-align:center;
+    color:#0f4c81;
+    margin-bottom:25px;
+}
+
+.medical-content p{
+    font-size:17px;
+    line-height:1.8;
+    margin-bottom:15px;
+    color:#374151;
+}
+
+.medical-note{
+    margin-top:25px;
+    padding:20px;
+    border-left:6px solid #1565c0;
+    background:#eef6ff;
+    border-radius:10px;
+    font-size:16px;
+}

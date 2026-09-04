@@ -1,0 +1,33 @@
+.home {
+  min-height: 100vh;
+  background: #f4f8fc;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  max-width: 1450px;
+  width: 100%;
+  margin: 30px auto;
+  padding: 20px 30px;
+  display: grid;
+  grid-template-columns: 320px 350px 380px;
+  gap: 30px;
+  align-items: start;
+}
+
+/* Responsive Layout */
+
+@media (max-width: 1200px) {
+  .main-content {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 850px) {
+  .main-content {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+}

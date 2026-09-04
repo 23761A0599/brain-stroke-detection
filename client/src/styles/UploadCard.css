@@ -1,0 +1,56 @@
+.upload-card {
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  text-align: center;
+  transition: 0.3s ease;
+}
+
+.upload-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
+}
+
+.upload-card h2 {
+  color: #0f4c81;
+  font-size: 24px;
+  margin-bottom: 25px;
+}
+
+.upload-card input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  border: 2px dashed #4f8ef7;
+  border-radius: 12px;
+  background: #f8fbff;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.upload-card input[type="file"]:hover {
+  background: #eef6ff;
+}
+
+.upload-card button {
+  width: 100%;
+  padding: 14px;
+  background: #0f4c81;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.upload-card button:hover {
+  background: #1565c0;
+}
+
+.upload-card button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
