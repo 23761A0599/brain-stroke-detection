@@ -20,6 +20,14 @@ function App() {
     }
   };
 
+  const handleReset = () => {
+    setSelectedFile(null);
+    setFileName("");
+    setPreview(null);
+    setResult(null);
+    setError("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedFile) {
@@ -43,17 +51,20 @@ function App() {
     }
   };
 
-  // Helper function to resolve base64 strings or standard URLs
+  // Helper function to safely resolve base64 strings or standard URLs
   const formatImageSource = (imgData) => {
     if (!imgData) return preview;
-    if (imgData.startsWith("data:image/") || imgData.startsWith("http")) {
+    if (imgData.startsWith("data:image/") || imgData.startsWith("http://") || imgData.startsWith("https://")) {
       return imgData;
     }
     return `data:image/png;base64,${imgData}`;
   };
 
-  // Logic to handle prediction mapping
-  const rawConfidence = result?.confidence ?? 0;
+  // Logic to handle prediction mapping and numeric parse guarding
+  const rawConfidence = typeof result?.confidence === "number" 
+    ? result.confidence 
+    : parseFloat(result?.confidence || 0);
+
   const isHemorrhagic =
     result?.prediction === "Hemorrhagic" ||
     result?.prediction === "NonHemorrhagic" ||
@@ -63,12 +74,12 @@ function App() {
   const hemorrhagicProb = isHemorrhagic ? rawConfidence : 1 - rawConfidence;
   const nonHemorrhagicProb = isHemorrhagic ? 1 - rawConfidence : rawConfidence;
 
-  const displayHemorrhagicPct = (hemorrhagicProb * 100).toFixed(2);
-  const displayNonHemorrhagicPct = (nonHemorrhagicProb * 100).toFixed(2);
-  const displayMainConfidence = (rawConfidence * 100).toFixed(2);
+  const displayHemorrhagicPct = (hemorrhagicProb * (hemorrhagicProb > 1 ? 1 : 100)).toFixed(2);
+  const displayNonHemorrhagicPct = (nonHemorrhagicProb * (nonHemorrhagicProb > 1 ? 1 : 100)).toFixed(2);
+  const displayMainConfidence = (rawConfidence * (rawConfidence > 1 ? 1 : 100)).toFixed(2);
 
-  // Generate unique timestamp for cache busting if fetching URLs
-  const timestamp = Date.now();
+  // Fallback check for Pro Grad-CAM property name variations
+  const proGradCamImage = result?.gradcam_pro || result?.pro_gradcam || result?.proGradcam;
 
   return (
     <div style={styles.appWrapper}>
@@ -143,17 +154,29 @@ function App() {
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading || !selectedFile}
-                style={{
-                  ...styles.predictBtn,
-                  opacity: loading || !selectedFile ? 0.5 : 1,
-                  cursor: loading || !selectedFile ? "not-allowed" : "pointer"
-                }}
-              >
-                {loading ? "PROCESSING SCAN..." : "PREDICT RESULT"}
-              </button>
+              <div style={{ width: "100%", display: "flex", gap: "10px" }}>
+                <button
+                  type="submit"
+                  disabled={loading || !selectedFile}
+                  style={{
+                    ...styles.predictBtn,
+                    opacity: loading || !selectedFile ? 0.5 : 1,
+                    cursor: loading || !selectedFile ? "not-allowed" : "pointer"
+                  }}
+                >
+                  {loading ? "PROCESSING SCAN..." : "PREDICT RESULT"}
+                </button>
+
+                {(selectedFile || result) && (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    style={styles.resetBtn}
+                  >
+                    RESET
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
@@ -309,7 +332,7 @@ function App() {
                 <h4 style={styles.explainCardTitle}>Professional Grad-CAM</h4>
                 <div style={styles.imageBox}>
                   <img
-                    src={formatImageSource(result.gradcam_pro)}
+                    src={formatImageSource(proGradCamImage)}
                     alt="Pro Grad-CAM"
                     style={styles.explainImage}
                   />
@@ -481,7 +504,7 @@ const styles = {
     boxShadow: "0 10px 20px -5px rgba(0, 0, 0, 0.2)",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
+    justify: "space-between",
   },
   uploadForm: {
     display: "flex",
@@ -530,19 +553,30 @@ const styles = {
     fontWeight: "800",
     fontSize: "14px",
     letterSpacing: "0.5px",
-    width: "100%",
+    flex: 1,
     boxShadow: "0 4px 12px rgba(30, 64, 175, 0.3)",
+    transition: "all 0.2s ease-in-out",
+  },
+  resetBtn: {
+    backgroundColor: "#475569",
+    color: "#FFFFFF",
+    border: "none",
+    padding: "12px 16px",
+    borderRadius: "8px",
+    fontWeight: "800",
+    fontSize: "13px",
+    cursor: "pointer",
     transition: "all 0.2s ease-in-out",
   },
   resultContainer: {
     display: "flex",
     flexDirection: "column",
-    justifyContent: "center",
+    justify: "center",
     flex: 1,
   },
   resultRow: {
     display: "flex",
-    justifyContent: "space-between",
+    justify: "space-between",
     alignItems: "center",
     padding: "14px 0",
     borderBottom: "1px solid #F1F5F9",
@@ -569,12 +603,12 @@ const styles = {
   probContainer: {
     display: "flex",
     flexDirection: "column",
-    justifyContent: "center",
+    justify: "center",
     flex: 1,
   },
   probHeader: {
     display: "flex",
-    justifyContent: "space-between",
+    justify: "space-between",
     fontSize: "13px",
     fontWeight: "800",
   },
@@ -593,7 +627,7 @@ const styles = {
   emptyStateBox: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    justify: "center",
     flex: 1,
     minHeight: "120px",
   },
