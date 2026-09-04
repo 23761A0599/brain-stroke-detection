@@ -19,8 +19,7 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "models", "EfficientNetB0", "best_efficientnetb0.pth")
-
+MODEL_PATH = os.path.join(BASE_DIR, "models", "best_efficientnetb0.pth")
 # Image preprocessing pipeline
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
