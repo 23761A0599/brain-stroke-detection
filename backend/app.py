@@ -9,7 +9,9 @@ import timm
 import gdown
 
 app = Flask(__name__)
-CORS(app)
+
+# Explicit CORS configuration allowing requests from any frontend
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
@@ -51,12 +53,10 @@ transform = transforms.Compose([
 
 CLASSES = ["Non-Hemorrhagic", "Hemorrhagic"]
 
-# Root health-check endpoint
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"status": "Backend service is live and ready."})
 
-# Prediction endpoint
 @app.route("/predict", methods=["POST"])
 def predict():
     if model is None:
