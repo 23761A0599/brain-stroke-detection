@@ -1,97 +1,24 @@
 import os
-import io
 import torch
-from torchvision import transforms
-from PIL import Image
+import torchvision.models as models
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import timm
-import gdown
 
 app = Flask(__name__)
 
-# Explicit CORS configuration allowing requests from any frontend
-CORS(app, resources={r"/*": {"origins": "*"}})
-
+# Relative path pointing directly to your local file in the repo
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(BASE_DIR, "models")
-MODEL_PATH = os.path.join(MODEL_DIR, "best_efficientnetb0.pth")
+MODEL_PATH = os.path.join(BASE_DIR, "models", "best_efficientnetb0.pth")
 
-GDRIVE_FILE_ID = "1Os3q78NLEakiBeTS-Oa2SFNQulNipFHH"
+# Revert to standard torchvision model structure
+model = models.efficientnet_b0(weights=None)
+num_ftrs = model.classifier[1].in_features
+model.classifier[1] = torch.nn.Linear(num_ftrs, 2)
 
-def ensure_model_downloaded():
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 1000000:
-        print("Downloading model weights from Google Drive...")
-        url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
-        gdown.download(url, MODEL_PATH, quiet=False)
-
-ensure_model_downloaded()
-
-def load_model():
-    model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=2)
+# Load weights directly from repo folder
+if os.path.exists(MODEL_PATH):
     state_dict = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
     model.load_state_dict(state_dict)
     model.eval()
-    return model
-
-try:
-    model = load_model()
-    print("Model loaded successfully.")
-except Exception as e:
-    print(f"Error loading model: {e}")
-    model = None
-
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    )
-])
-
-CLASSES = ["Non-Hemorrhagic", "Hemorrhagic"]
-
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"status": "Backend service is live and ready."})
-
-@app.route("/predict", methods=["POST"])
-def predict():
-    if model is None:
-        return jsonify({
-            "error": "Model failed to load on server.",
-            "prediction": "Error",
-            "confidence": 0.0
-        }), 500
-
-    if "file" not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
-
-    file = request.files["file"]
-    
-    try:
-        image_bytes = file.read()
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        tensor = transform(image).unsqueeze(0)
-
-        with torch.no_grad():
-            outputs = model(tensor)
-            probabilities = torch.nn.functional.softmax(outputs, dim=1)[0]
-            confidence, predicted_idx = torch.max(probabilities, dim=0)
-
-        predicted_class = CLASSES[predicted_idx.item()]
-        confidence_pct = round(confidence.item() * 100, 2)
-
-        return jsonify({
-            "prediction": predicted_class,
-            "confidence": confidence_pct
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    print("Model loaded successfully from local file.")
+else:
+    print(f"Error: File not found at {MODEL_PATH}")
