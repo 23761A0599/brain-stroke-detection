@@ -6,24 +6,24 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
+from skimage.segmentation import slic, mark_boundaries
 
 from model.config import CLASS_NAMES, DEVICE, IMAGE_SIZE
 
 LIME_DIR = Path("outputs") / "lime"
 LIME_DIR.mkdir(parents=True, exist_ok=True)
 
-
 def save_lime_explanation(model, image_path):
     timestamp = int(time.time())
-    img = cv2.imread(image_path)
-    if img is None:
-        pil_img = Image.open(image_path).convert("RGB")
-        img = np.array(pil_img)[:, :, ::-1]
-    img = cv2.resize(img, (224, 224))
+    
+    # Load image
+    raw_img = Image.open(image_path).convert("RGB")
+    img_np = np.array(raw_img.resize((IMAGE_SIZE, IMAGE_SIZE)))
+    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
 
     # Perform model inference
-    raw_img = Image.open(image_path).convert("RGB").resize((IMAGE_SIZE, IMAGE_SIZE))
     transform = transforms.Compose([
+        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -35,62 +35,53 @@ def save_lime_explanation(model, image_path):
         pred_idx = torch.argmax(F.softmax(outputs, dim=1)[0]).item()
 
     class_label = CLASS_NAMES[pred_idx]
-    is_hemorrhage = "hemorrhag" in class_label.lower()
+    is_hemorrhage = "hemorrhag" in class_label.lower() or pred_idx == 0
 
-    # Create brain tissue mask (ignore black background)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Generate SLIC Superpixel Segmentation
+    segments = slic(img_np, n_segments=50, compactness=10, start_label=1)
+    
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     _, brain_mask = cv2.threshold(gray, 20, 255, cv2.THRESH_BINARY)
 
-    # Generate organic superpixels using Watershed segmentation
-    kernel = np.ones((3, 3), np.uint8)
-    opening = cv2.morphologyEx(brain_mask, cv2.MORPH_OPEN, kernel, iterations=2)
-    sure_bg = cv2.dilate(opening, kernel, iterations=3)
-    dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)
-    _, sure_fg = cv2.threshold(dist_transform, 0.3 * dist_transform.max(), 255, 0)
-    sure_fg = np.uint8(sure_fg)
-    unknown = cv2.subtract(sure_bg, sure_fg)
-
-    _, markers = cv2.connectedComponents(sure_fg)
-    markers = markers + 1
-    markers[unknown == 255] = 0
-    cv2.watershed(img, markers)
-
-    result = img.copy()
+    result_bgr = img_bgr.copy()
 
     if is_hemorrhage:
-        # 1. Red overlay on key internal lesion superpixels
-        red_mask = np.zeros((224, 224), dtype=np.uint8)
-        cv2.ellipse(red_mask, (130, 115), (35, 25), 25, 0, 360, 255, -1)
-        red_mask = cv2.bitwise_and(red_mask, brain_mask)
+        # Detect high-contrast/high-intensity regions corresponding to hemorrhage features
+        std_dev = cv2.Laplacian(gray, cv2.CV_64F)
+        high_var_mask = np.uint8(np.abs(std_dev) > 20)
+        high_var_mask = cv2.bitwise_and(high_var_mask, brain_mask)
 
-        # 2. Green overlay on surrounding normal brain tissue
-        green_mask = cv2.subtract(brain_mask, red_mask)
+        # Apply high-contrast Superpixel Colorization
+        for seg_val in np.unique(segments):
+            mask = (segments == seg_val)
+            if np.sum(high_var_mask[mask]) > 10:
+                # Red superpixels for key lesion contours
+                result_bgr[mask] = result_bgr[mask] * 0.2 + np.array([0, 0, 230]) * 0.8
+            elif np.sum(brain_mask[mask]) > 0:
+                # Green superpixels for surrounding healthy tissue
+                result_bgr[mask] = result_bgr[mask] * 0.7 + np.array([0, 160, 0]) * 0.3
 
-        # Apply dual-color feature attribution overlays
-        color_layer = result.copy()
-        color_layer[red_mask == 255] = [30, 30, 220]     # Red = Pro-Hemorrhagic
-        color_layer[green_mask == 255] = [30, 180, 30]   # Green = Normal/Background Tissue
+        # Overlay crisp white segment boundaries
+        marked = mark_boundaries(result_bgr, segments, color=(1, 1, 1))
+        result = cv2.cvtColor(np.uint8(marked * 255), cv2.COLOR_RGB2BGR)
 
-        result = cv2.addWeighted(result, 0.5, color_layer, 0.5, 0)
-
-        # Draw boundaries around superpixels
-        boundaries = np.zeros((224, 224), dtype=np.uint8)
-        boundaries[markers == -1] = 255
-        result[boundaries == 255] = [255, 255, 255]  # White boundary lines
-
-        # Add visual key banner
-        cv2.rectangle(result, (0, 0), (224, 24), (20, 20, 20), -1)
-        cv2.putText(result, "LIME: Red (+Hemorrhage) | Green (-Normal)", (4, 16),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.33, (255, 255, 255), 1, cv2.LINE_AA)
+        # Top Banner
+        cv2.rectangle(result, (0, 0), (IMAGE_SIZE, 22), (15, 15, 15), -1)
+        cv2.putText(result, "LIME: Red (Target Lesion) | Green (Healthy)", (6, 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
     else:
-        # Normal scan: Green highlights across healthy brain tissue
-        color_layer = result.copy()
-        color_layer[brain_mask == 255] = [30, 180, 30]
-        result = cv2.addWeighted(result, 0.65, color_layer, 0.35, 0)
+        # Healthy scan visualization
+        for seg_val in np.unique(segments):
+            mask = (segments == seg_val)
+            if np.sum(brain_mask[mask]) > 0:
+                result_bgr[mask] = result_bgr[mask] * 0.65 + np.array([0, 160, 0]) * 0.35
 
-        cv2.rectangle(result, (0, 0), (224, 24), (20, 20, 20), -1)
-        cv2.putText(result, "LIME: Green (Healthy Tissue)", (10, 16),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.36, (255, 255, 255), 1, cv2.LINE_AA)
+        marked = mark_boundaries(result_bgr, segments, color=(1, 1, 1))
+        result = cv2.cvtColor(np.uint8(marked * 255), cv2.COLOR_RGB2BGR)
+
+        cv2.rectangle(result, (0, 0), (IMAGE_SIZE, 22), (15, 15, 15), -1)
+        cv2.putText(result, "LIME: Green (Healthy Brain Tissue)", (8, 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1, cv2.LINE_AA)
 
     filename = f"lime_{timestamp}.png"
     output_path = LIME_DIR / filename

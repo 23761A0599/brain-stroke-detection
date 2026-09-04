@@ -1,73 +1,79 @@
-import asyncio
-from pathlib import Path
-import time
-from fastapi import APIRouter, File, UploadFile
+import base64
+import cv2
+import numpy as np
 import torch
-import torch.nn.functional as F
+from fastapi import APIRouter, File, UploadFile, HTTPException
 from PIL import Image
-from torchvision import transforms
 
 from model.config import CLASS_NAMES, DEVICE, IMAGE_SIZE
-from model.model_loader import load_model
+from services.gradcam import generate_gradcam_map, transform
 from services.gradcam_pro import generate_gradcam_images
 from services.lime_explainer import save_lime_explanation
+from services.predictor import model  # Imports the loaded PyTorch model instance
 
 router = APIRouter()
 
-model = load_model("efficientnetb0").to(DEVICE)
-model.eval()
 
-transform = transforms.Compose([
-    transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
-
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+def encode_image_to_base64(file_path: str) -> str:
+    """Helper function to convert output image files to base64 strings for React rendering."""
+    with open(file_path, "rb") as image_file:
+        encoded = base64.b64encode(image_file.read()).decode("utf-8")
+        return f"data:image/png;base64,{encoded}"
 
 
 @router.post("/predict")
-async def predict_route(file: UploadFile = File(...)):
-    temp_path = UPLOAD_DIR / file.filename
-    with open(temp_path, "wb") as f:
-        f.write(await file.read())
+async def predict(file: UploadFile = File(...)):
+    try:
+        # 1. Read input image bytes
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
 
-    raw_image = Image.open(temp_path).convert("RGB")
-    tensor_image = transform(raw_image).unsqueeze(0).to(DEVICE)
+        # Decode as a 3-channel BGR image directly using OpenCV to preserve colors
+        orig_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if orig_bgr is None:
+            raise HTTPException(status_code=400, detail="Invalid image file format.")
 
-    with torch.no_grad():
-        outputs = model(tensor_image)
-        probabilities = F.softmax(outputs, dim=1)[0]
-        pred_idx = torch.argmax(probabilities).item()
+        # 2. Convert to PIL Image and apply transformations for model input
+        pil_img = Image.fromarray(cv2.cvtColor(orig_bgr, cv2.COLOR_BGR2RGB))
+        image_tensor = transform(pil_img).unsqueeze(0).to(DEVICE)
 
-    class_name = CLASS_NAMES[pred_idx]
-    confidence = float(probabilities[pred_idx].item()) * 100
+        # 3. Compute Grad-CAM activation map from model
+        cam_map, pred_class_idx = generate_gradcam_map(model, image_tensor)
 
-    class_probs = {}
-    for idx, name in enumerate(CLASS_NAMES):
-        class_probs[name] = round(float(probabilities[idx].item()) * 100, 2)
+        # Get confidence probability score from model outputs
+        with torch.no_grad():
+            outputs = model(image_tensor)
+            probs = torch.softmax(outputs, dim=1)[0]
+            confidence = probs[pred_class_idx].item()
 
-    # Run heavy processing in non-blocking worker threads
-    std_cam_path, pro_cam_path = await asyncio.to_thread(
-        generate_gradcam_images, model, str(temp_path), confidence, class_name
-    )
-    lime_data = await asyncio.to_thread(
-        save_lime_explanation, model, str(temp_path)
-    )
+        predicted_label = CLASS_NAMES[pred_class_idx]
+        is_hemorrhagic = "hemorrhag" in predicted_label.lower() or pred_class_idx == 0
 
-    timestamp = int(time.time())
+        # 4. Generate visual overlays if classification is Hemorrhagic
+        if is_hemorrhagic:
+            img_paths = generate_gradcam_images(
+                orig_bgr=orig_bgr,
+                cam_map=cam_map,
+                confidence_score=confidence,
+                class_name=predicted_label
+            )
 
-    def build_url(path_str):
-        clean_p = str(path_str).replace("\\", "/").lstrip("/")
-        return f"http://localhost:8000/{clean_p}?t={timestamp}"
+            # Convert generated images to base64 response format
+            gradcam_b64 = encode_image_to_base64(img_paths["gradcam"])
+            gradcam_pro_b64 = encode_image_to_base64(img_paths["gradcam_pro"])
+            lime_b64 = encode_image_to_base64(img_paths["lime"])
+        else:
+            gradcam_b64, gradcam_pro_b64, lime_b64 = None, None, None
 
-    return {
-        "prediction": class_name,
-        "confidence": round(confidence, 2),
-        "class_probabilities": class_probs,
-        "probabilities": class_probs,
-        "gradcam_url": build_url(std_cam_path),
-        "gradcam_pro_url": build_url(pro_cam_path),
-        "lime_url": build_url(lime_data["lime_path"]),
-    }
+        return {
+            "prediction": predicted_label,
+            "confidence": confidence,
+            "confidence_percentage": f"{confidence * 100:.2f}%",
+            "is_hemorrhagic": is_hemorrhagic,
+            "gradcam": gradcam_b64,
+            "gradcam_pro": gradcam_pro_b64,
+            "lime": lime_b64
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
