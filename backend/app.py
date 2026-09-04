@@ -11,26 +11,21 @@ import gdown
 app = Flask(__name__)
 CORS(app)
 
-# Path setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "best_efficientnetb0.pth")
 
-# Google Drive File ID for best_efficientnetb0.pth
 GDRIVE_FILE_ID = "1Os3q78NLEakiBeTS-Oa2SFNQulNipFHH"
 
 def ensure_model_downloaded():
-    """Downloads model weights from Google Drive if missing or corrupt."""
     os.makedirs(MODEL_DIR, exist_ok=True)
     if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 1000000:
         print("Downloading model weights from Google Drive...")
         url = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
         gdown.download(url, MODEL_PATH, quiet=False)
 
-# Auto-download model weights on server start
 ensure_model_downloaded()
 
-# Load Model
 def load_model():
     model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=2)
     state_dict = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
@@ -45,7 +40,6 @@ except Exception as e:
     print(f"Error loading model: {e}")
     model = None
 
-# Transformations for MRI input image
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -57,6 +51,12 @@ transform = transforms.Compose([
 
 CLASSES = ["Non-Hemorrhagic", "Hemorrhagic"]
 
+# Root health-check endpoint
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"status": "Backend service is live and ready."})
+
+# Prediction endpoint
 @app.route("/predict", methods=["POST"])
 def predict():
     if model is None:
