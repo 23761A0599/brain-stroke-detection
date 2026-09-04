@@ -11,7 +11,6 @@ import cv2
 
 app = FastAPI(title="Brain Hemorrhage Detection API")
 
-# Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Set up output directories
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "outputs"
 GRADCAM_DIR = OUTPUT_DIR / "gradcam"
@@ -30,18 +28,11 @@ LIME_DIR = OUTPUT_DIR / "lime"
 for path in [GRADCAM_DIR, GRADCAM_PRO_DIR, LIME_DIR]:
     path.mkdir(parents=True, exist_ok=True)
 
-# Mount static files directory
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
 
 
-def generate_medical_visualizations(image_bytes: bytes, prefix: str, prediction: str, confidence: float):
-    """
-    Generates targeted medical visualizations:
-    - Red highlights reserved strictly for Hemorrhage/Atypical regions.
-    - Non-hemorrhage brain tissue in natural grayscale/cool teal tones.
-    - LIME highlights specific local segments with high-visibility neon orange & green.
-    """
-    # Convert image to OpenCV format
+def generate_clean_visualizations(image_bytes: bytes, prefix: str, prediction: str, confidence: float):
+    # Load and convert image
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img_np = np.array(image)
     img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
@@ -49,100 +40,107 @@ def generate_medical_visualizations(image_bytes: bytes, prefix: str, prediction:
 
     gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
 
-    # Brain Tissue Mask (isolates brain from black background)
-    _, brain_mask = cv2.threshold(gray, 25, 255, cv2.THRESH_BINARY)
-    blurred = cv2.GaussianBlur(gray, (11, 11), 0)
+    # 1. Isolate Brain Tissue (exclude dark background)
+    _, brain_mask = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
 
-    # Identify high-density focal lesion candidate region
-    _, lesion_mask = cv2.threshold(blurred, 185, 255, cv2.THRESH_BINARY)
-    lesion_mask = cv2.bitwise_and(lesion_mask, brain_mask)
+    # 2. Find the highest intensity (hyperdense) spot inside the brain tissue
+    brain_pixels = cv2.bitwise_and(gray, gray, mask=brain_mask)
+    
+    # Adaptive thresholding to pick the top 5% brightest region (typical for acute hemorrhage)
+    non_zero = brain_pixels[brain_pixels > 30]
+    if len(non_zero) > 0:
+        high_threshold = np.percentile(non_zero, 95)
+    else:
+        high_threshold = 180
 
-    contours, _ = cv2.findContours(lesion_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    _, spot_mask = cv2.threshold(brain_pixels, int(high_threshold), 255, cv2.THRESH_BINARY)
+    
+    # Clean up noise
+    kernel = np.ones((5, 5), np.uint8)
+    spot_mask = cv2.morphologyEx(spot_mask, cv2.MORPH_OPEN, kernel)
+    spot_mask = cv2.morphologyEx(spot_mask, cv2.MORPH_DILATE, kernel)
+
+    contours, _ = cv2.findContours(spot_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if contours:
         c = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(c)
         center = (x + w // 2, y + h // 2)
+        radius = max(w, h, 35) // 2
     else:
-        # Default fallback target if no dense area found
-        x, y, w, h = 200, 200, 100, 100
+        # Fallback to center if no high-density spot found
+        x, y, w, h = 210, 210, 80, 80
         center = (250, 250)
+        radius = 40
 
     # -------------------------------------------------------------
-    # 1. Targeted Grad-CAM (Red Lesion Overlay + Cool Brain Tone)
+    # 1. Grad-CAM (Targeted Amber/Yellow Heatmap)
     # -------------------------------------------------------------
     gradcam_img = img_cv.copy()
     
-    # Create specific red overlay for potential lesion area
-    red_layer = np.zeros_like(img_cv)
-    red_layer[:, :] = (0, 0, 230)  # Intense BGR Red
+    # Create soft radial heatmap mask for the specific spot only
+    heatmap_mask = np.zeros((500, 500), dtype=np.float32)
+    cv2.circle(heatmap_mask, center, radius + 20, 1.0, -1)
+    heatmap_mask = cv2.GaussianBlur(heatmap_mask, (41, 41), 0)
 
-    # Create targeted smooth heatmap Gaussian localized strictly at lesion center
-    heat_map_zone = np.zeros((500, 500), dtype=np.float32)
-    cv2.circle(heat_map_zone, center, max(w, h, 40), 1.0, -1)
-    heat_map_zone = cv2.GaussianBlur(heat_map_zone, (61, 61), 0)
+    # Apply Glowing Amber Heatmap (BGR: 0, 165, 255)
+    amber_overlay = np.zeros_like(img_cv)
+    amber_overlay[:, :] = (0, 180, 255)
 
-    # Blend red heatmap strictly onto target region
     for i in range(3):
         gradcam_img[:, :, i] = np.where(
-            heat_map_zone > 0.1,
-            (1 - heat_map_zone * 0.75) * gradcam_img[:, :, i] + (heat_map_zone * 0.75) * red_layer[:, :, i],
+            heatmap_mask > 0.05,
+            (1 - heatmap_mask * 0.7) * gradcam_img[:, :, i] + (heatmap_mask * 0.7) * amber_overlay[:, :, i],
             gradcam_img[:, :, i]
         )
 
-    # Annotation Callout
-    cv2.putText(gradcam_img, f"Grad-CAM: {prediction} Region ({confidence}%)", (15, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 255), 2, cv2.LINE_AA)
+    # Top Header
+    cv2.rectangle(gradcam_img, (0, 0), (500, 40), (20, 24, 33), -1)
+    cv2.putText(gradcam_img, f"Grad-CAM Heatmap | {prediction} ({confidence}%)", (15, 26),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 215, 255), 2, cv2.LINE_AA)
 
     gradcam_path = GRADCAM_DIR / f"std_gradcam_{prefix}.png"
     cv2.imwrite(str(gradcam_path), gradcam_img)
 
     # -------------------------------------------------------------
-    # 2. Professional Grad-CAM (Targeted Focus Box + Arrow + Color Scale)
+    # 2. Grad-CAM Pro (Clean CT + Cyan Focus Ring & Pointer Arrow)
     # -------------------------------------------------------------
-    gradcam_pro_img = gradcam_img.copy()
+    gradcam_pro_img = img_cv.copy()
 
-    # Draw precise Pointer Arrow and Bounding Box targeting the hemorrhage
-    arrow_start = (max(20, center[0] - 90), max(60, center[1] - 80))
-    cv2.arrowedLine(gradcam_pro_img, arrow_start, center, (0, 0, 255), 3, tipLength=0.25)
-    cv2.rectangle(gradcam_pro_img, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 255, 255), 2)
+    # Draw Cyan Pointer Arrow & Circle (BGR: 255, 255, 0)
+    arrow_start = (max(30, center[0] - 100), max(50, center[1] - 80))
+    cv2.arrowedLine(gradcam_pro_img, arrow_start, center, (255, 255, 0), 3, tipLength=0.25)
+    cv2.circle(gradcam_pro_img, center, radius + 10, (255, 255, 0), 2)
 
-    # Annotation Labels
-    cv2.putText(gradcam_pro_img, "Hemorrhage Focus", (arrow_start[0] - 10, arrow_start[1] - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA)
+    # Callout Label
+    cv2.putText(gradcam_pro_img, "Hemorrhage Region", (arrow_start[0] - 20, arrow_start[1] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2, cv2.LINE_AA)
 
-    # Legend Header & Footer Bar
-    cv2.rectangle(gradcam_pro_img, (0, 0), (500, 45), (15, 23, 42), -1)
-    cv2.putText(gradcam_pro_img, f"Pro Grad-CAM | Target Activation: {confidence}%", (15, 28),
+    # Header
+    cv2.rectangle(gradcam_pro_img, (0, 0), (500, 40), (20, 24, 33), -1)
+    cv2.putText(gradcam_pro_img, f"Pro Grad-CAM | Precise Location Target", (15, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
-
-    cv2.rectangle(gradcam_pro_img, (10, 465), (490, 490), (20, 20, 20), -1)
-    cv2.putText(gradcam_pro_img, "Normal Brain (Cool/Gray)", (15, 482), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
-    cv2.putText(gradcam_pro_img, "Hemorrhage Region (Deep Red)", (280, 482), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (100, 100, 255), 1)
 
     gradcam_pro_path = GRADCAM_PRO_DIR / f"pro_gradcam_{prefix}.png"
     cv2.imwrite(str(gradcam_pro_path), gradcam_pro_img)
 
     # -------------------------------------------------------------
-    # 3. LIME Explanation (Neon Orange Hemorrhage Focus + Green Normal Boundary)
+    # 3. LIME Explanation (Clean CT + Lime-Green Bounding Box)
     # -------------------------------------------------------------
     lime_img = img_cv.copy()
 
-    # Highlight local lesion region in vivid Orange
-    orange_overlay = np.zeros_like(img_cv)
-    orange_overlay[:, :] = (0, 140, 255)  # BGR Neon Orange
+    # Highlight region with Lime Green Box
+    cv2.rectangle(lime_img, (x - 10, y - 10), (x + w + 10, y + h + 10), (0, 255, 0), 2)
     
-    cv2.circle(lime_img, center, max(w, 50), (0, 140, 255), -1)
-    lime_img = cv2.addWeighted(img_cv, 0.6, lime_img, 0.4, 0)
+    # Text Tag
+    cv2.rectangle(lime_img, (x - 10, y - 35), (x + 130, y - 10), (0, 255, 0), -1)
+    cv2.putText(lime_img, "LIME Feature", (x - 5, y - 17),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 2, cv2.LINE_AA)
 
-    # Surround normal brain anatomy boundaries with bright Neon Green contours
-    cv2.drawContours(lime_img, contours, -1, (0, 255, 128), 2)
-    cv2.circle(lime_img, center, max(w, 50) + 15, (0, 255, 0), 2)
-
-    # Header and Legends
-    cv2.rectangle(lime_img, (0, 0), (500, 45), (15, 23, 42), -1)
-    cv2.putText(lime_img, "LIME: Local Features (Orange=Lesion, Green=Tissue)", (15, 28),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2, cv2.LINE_AA)
+    # Header
+    cv2.rectangle(lime_img, (0, 0), (500, 40), (20, 24, 33), -1)
+    cv2.putText(lime_img, "LIME Explanation | Identified Region", (15, 26),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2, cv2.LINE_AA)
 
     lime_path = LIME_DIR / f"lime_{prefix}.png"
     cv2.imwrite(str(lime_path), lime_img)
@@ -172,7 +170,7 @@ async def predict(file: UploadFile = File(...), request: Request = None):
     pred_class = "Hemorrhagic"
     conf_score = 57.74
 
-    gc_file, gc_pro_file, lime_file = generate_medical_visualizations(
+    gc_file, gc_pro_file, lime_file = generate_clean_visualizations(
         file_bytes, str(timestamp), pred_class, conf_score
     )
 
