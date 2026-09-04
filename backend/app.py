@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import torch
 import torchvision.transforms as transforms
+import timm
 
 app = FastAPI(title="Brain Hemorrhage Detection API")
 
@@ -33,15 +34,26 @@ for path in [GRADCAM_DIR, GRADCAM_PRO_DIR, LIME_DIR]:
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
 
 # -------------------------------------------------------------
-# 1. Load PyTorch Model & Define Preprocessing
+# 1. Load Model (Looks inside backend/models directly)
 # -------------------------------------------------------------
-MODEL_PATH = BASE_DIR.parent / "models" / "best_efficientnetb0.pth"
-try:
-    model = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
-    model.eval()
-except Exception as e:
-    print(f"Warning: Could not load model from {MODEL_PATH}. Error: {e}")
-    model = None
+MODEL_PATH = BASE_DIR / "models" / "best_efficientnetb0.pth"
+
+model = None
+if MODEL_PATH.exists():
+    try:
+        loaded_data = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
+        if isinstance(loaded_data, torch.nn.Module):
+            model = loaded_data
+        else:
+            # Instantiate EfficientNet-B0 and load state dict
+            model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=2)
+            model.load_state_dict(loaded_data)
+        model.eval()
+        print("Successfully loaded EfficientNet-B0 model!")
+    except Exception as e:
+        print(f"Failed to load model architecture: {e}")
+else:
+    print(f"CRITICAL ERROR: Model file not found at {MODEL_PATH}")
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -50,7 +62,7 @@ transform = transforms.Compose([
 ])
 
 # -------------------------------------------------------------
-# 2. Visualization Generation Function
+# 2. Visualizations Generator
 # -------------------------------------------------------------
 def generate_clean_visualizations(image_bytes: bytes, prefix: str, prediction: str, confidence: float):
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -87,7 +99,7 @@ def generate_clean_visualizations(image_bytes: bytes, prefix: str, prediction: s
         center = (250, 250)
         radius = 40
 
-    # Grad-CAM
+    # Standard Grad-CAM
     gradcam_img = img_cv.copy()
     heatmap_mask = np.zeros((500, 500), dtype=np.float32)
     cv2.circle(heatmap_mask, center, radius + 20, 1.0, -1)
@@ -110,7 +122,7 @@ def generate_clean_visualizations(image_bytes: bytes, prefix: str, prediction: s
     gradcam_path = GRADCAM_DIR / f"std_gradcam_{prefix}.png"
     cv2.imwrite(str(gradcam_path), gradcam_img)
 
-    # Grad-CAM Pro
+    # Pro Grad-CAM
     gradcam_pro_img = img_cv.copy()
     arrow_start = (max(30, center[0] - 100), max(50, center[1] - 80))
     cv2.arrowedLine(gradcam_pro_img, arrow_start, center, (255, 255, 0), 3, tipLength=0.25)
@@ -147,7 +159,7 @@ def generate_clean_visualizations(image_bytes: bytes, prefix: str, prediction: s
     )
 
 # -------------------------------------------------------------
-# 3. FastAPI Prediction Endpoint
+# 3. Prediction Endpoint
 # -------------------------------------------------------------
 @app.get("/")
 def read_root():
@@ -164,7 +176,6 @@ async def predict(file: UploadFile = File(...), request: Request = None):
     file_bytes = await file.read()
     image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
 
-    # Dynamic Inference with PyTorch
     if model is not None:
         input_tensor = transform(image).unsqueeze(0)
         with torch.no_grad():
@@ -172,17 +183,27 @@ async def predict(file: UploadFile = File(...), request: Request = None):
             probabilities = torch.softmax(outputs, dim=1)[0]
             
         hemorrhagic_prob = float(probabilities[1]) * 100
+        non_hemorrhagic_prob = float(probabilities[0]) * 100
         
         if hemorrhagic_prob >= 50.0:
             prediction_class = "Hemorrhagic"
             confidence_val = round(hemorrhagic_prob, 2)
         else:
             prediction_class = "NonHemorrhagic"
-            confidence_val = round(100 - hemorrhagic_prob, 2)
+            confidence_val = round(non_hemorrhagic_prob, 2)
+
+        class_probs = {
+            "Hemorrhagic": round(hemorrhagic_prob, 2),
+            "NonHemorrhagic": round(non_hemorrhagic_prob, 2)
+        }
     else:
-        # Fallback if model file is missing
-        prediction_class = "Hemorrhagic"
-        confidence_val = 57.74
+        # Debug indicator if model failed to load on server
+        prediction_class = "Model File Missing On Server"
+        confidence_val = 0.0
+        class_probs = {
+            "Hemorrhagic": 0.0,
+            "NonHemorrhagic": 0.0
+        }
 
     gc_file, gc_pro_file, lime_file = generate_clean_visualizations(
         file_bytes, str(timestamp), prediction_class, confidence_val
@@ -191,10 +212,8 @@ async def predict(file: UploadFile = File(...), request: Request = None):
     return {
         "prediction": prediction_class,
         "confidence": confidence_val,
-        "class_probabilities": {
-            "Hemorrhagic": confidence_val if prediction_class == "Hemorrhagic" else round(100 - confidence_val, 2),
-            "NonHemorrhagic": confidence_val if prediction_class == "NonHemorrhagic" else round(100 - confidence_val, 2)
-        },
+        "class_probabilities": class_probs,
+        "probabilities": class_probs,
         "gradcam_url": f"{base_url}/outputs/gradcam/{gc_file}",
         "gradcam_pro_url": f"{base_url}/outputs/gradcam_pro/{gc_pro_file}",
         "lime_url": f"{base_url}/outputs/lime/{lime_file}"
