@@ -17,10 +17,10 @@ MODEL_DIR = os.path.join(BASE_DIR, "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "best_efficientnetb0.pth")
 
 # Google Drive File ID for best_efficientnetb0.pth
-GDRIVE_FILE_ID = "YOUR_GOOGLE_DRIVE_FILE_ID"
+GDRIVE_FILE_ID = "1Os3q78NLEakiBeTS-Oa2SFNQulNipFHH"
 
 def ensure_model_downloaded():
-    """Downloads model weights if missing or if file is an LFS pointer (<1MB)."""
+    """Downloads model weights from Google Drive if missing or corrupt."""
     os.makedirs(MODEL_DIR, exist_ok=True)
     if not os.path.exists(MODEL_PATH) or os.path.getsize(MODEL_PATH) < 1000000:
         print("Downloading model weights from Google Drive...")
@@ -45,7 +45,7 @@ except Exception as e:
     print(f"Error loading model: {e}")
     model = None
 
-# Transformations for MRI input
+# Transformations for MRI input image
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
