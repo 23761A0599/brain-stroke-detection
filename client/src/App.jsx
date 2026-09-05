@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 import { predictImage } from "./services/api";
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://brain-hemorrhage-backend.onrender.com";
+
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -43,7 +47,9 @@ function App() {
       setResult(data);
     } catch (err) {
       setError(
-        err.response?.data?.detail || err.message || "Failed to process scan on server."
+        err.response?.data?.detail ||
+          err.message ||
+          "Failed to process scan on server."
       );
       console.error("Prediction Error:", err);
     } finally {
@@ -59,6 +65,15 @@ function App() {
     return parseFloat(String(val).replace("%", "")) || 0;
   };
 
+  const resolveImageUrl = (pathOrData) => {
+    if (!pathOrData) return "";
+    if (pathOrData.startsWith("data:") || pathOrData.startsWith("http")) {
+      return pathOrData;
+    }
+    const cleanPath = pathOrData.startsWith("/") ? pathOrData : `/${pathOrData}`;
+    return `${API_BASE_URL}${cleanPath}`;
+  };
+
   const mainConfidence = parsePercent(result?.confidence);
   const hemorrhagicPct = parsePercent(result?.hemorrhage_confidence);
   const nonHemorrhagicPct = parsePercent(result?.normal_confidence);
@@ -68,7 +83,8 @@ function App() {
       <header style={styles.header}>
         <h1 style={styles.headerTitle}>Brain Hemorrhage Detection System</h1>
         <p style={styles.headerSubtitle}>
-          Deep learning-based MRI analysis using EfficientNet-B0 &middot; FastAPI &middot; React &middot; Grad-CAM &middot; LIME explainability
+          Deep learning-based MRI analysis using EfficientNet-B0 &middot; FastAPI
+          &middot; React &middot; Grad-CAM &middot; LIME explainability
         </p>
       </header>
 
@@ -76,7 +92,8 @@ function App() {
         <section style={styles.card}>
           <h2 style={styles.cardTitle}>Project Information</h2>
           <h3 style={styles.projectHeading}>
-            A Deep Neural Network Approach for Hemorrhagic Stroke Identification in MRI Scans
+            A Deep Neural Network Approach for Hemorrhagic Stroke Identification
+            in MRI Scans
           </h3>
           <div style={styles.infoGrid}>
             <div style={styles.infoBox}>
@@ -86,19 +103,29 @@ function App() {
 
               <div style={{ marginTop: "16px" }}>
                 <p style={styles.infoLabel}>Department</p>
-                <p style={styles.infoBoldValue}>Computer Science and Engineering</p>
+                <p style={styles.infoBoldValue}>
+                  Computer Science and Engineering
+                </p>
               </div>
             </div>
 
             <div style={styles.infoBox}>
               <p style={styles.infoLabel}>Presented by</p>
-              <p style={styles.infoBoldValue}>K. Subba Rao &nbsp;&middot;&nbsp; 23761A0599</p>
-              <p style={styles.infoBoldValue}>D. Kowshik Reddy &nbsp;&middot;&nbsp; 23761A0584</p>
-              <p style={styles.infoBoldValue}>Sh. Thasleem &nbsp;&middot;&nbsp; 23761A05C2</p>
+              <p style={styles.infoBoldValue}>
+                K. Subba Rao &nbsp;&middot;&nbsp; 23761A0599
+              </p>
+              <p style={styles.infoBoldValue}>
+                D. Kowshik Reddy &nbsp;&middot;&nbsp; 23761A0584
+              </p>
+              <p style={styles.infoBoldValue}>
+                Sh. Thasleem &nbsp;&middot;&nbsp; 23761A05C2
+              </p>
 
               <div style={{ marginTop: "16px" }}>
                 <p style={styles.infoLabel}>College</p>
-                <p style={styles.infoBoldValue}>Lakireddy Bali Reddy College of Engineering</p>
+                <p style={styles.infoBoldValue}>
+                  Lakireddy Bali Reddy College of Engineering
+                </p>
               </div>
             </div>
           </div>
@@ -120,7 +147,11 @@ function App() {
               {fileName && <p style={styles.fileNameText}>{fileName}</p>}
 
               {preview && (
-                <img src={preview} alt="MRI preview" style={styles.previewImage} />
+                <img
+                  src={preview}
+                  alt="MRI preview"
+                  style={styles.previewImage}
+                />
               )}
 
               <div style={{ width: "100%", display: "flex", gap: "10px" }}>
@@ -137,7 +168,11 @@ function App() {
                 </button>
 
                 {(selectedFile || result) && (
-                  <button type="button" onClick={handleReset} style={styles.resetBtn}>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    style={styles.resetBtn}
+                  >
                     Reset
                   </button>
                 )}
@@ -162,7 +197,9 @@ function App() {
                 </div>
                 <div style={styles.resultRow}>
                   <span style={styles.rowLabel}>Confidence</span>
-                  <strong style={styles.confidenceText}>{mainConfidence.toFixed(2)}%</strong>
+                  <strong style={styles.confidenceText}>
+                    {mainConfidence.toFixed(2)}%
+                  </strong>
                 </div>
               </div>
             ) : (
@@ -206,7 +243,9 @@ function App() {
               </div>
             ) : (
               <div style={styles.emptyStateBox}>
-                <p style={styles.emptyStateText}>Probabilities will appear here.</p>
+                <p style={styles.emptyStateText}>
+                  Probabilities will appear here.
+                </p>
               </div>
             )}
           </div>
@@ -237,41 +276,44 @@ function App() {
                     <strong>{mainConfidence.toFixed(2)}%</strong>.
                   </p>
                   <p>
-                    The <strong>Grad-CAM</strong> visualization highlights the image regions
-                    that most influenced the model's prediction.
+                    The <strong>Grad-CAM</strong> visualization highlights the
+                    image regions that most influenced the model's prediction.
                   </p>
                   <p>
-                    The <strong>Professional Grad-CAM</strong> provides an enhanced
-                    visualization of the region that contributed most strongly to the
-                    classification.
+                    The <strong>Professional Grad-CAM</strong> provides an
+                    enhanced visualization of the region that contributed most
+                    strongly to the classification.
                   </p>
                   <p>
-                    The <strong>LIME explanation</strong> identifies the local image features
-                    that had the greatest influence on the prediction.
+                    The <strong>LIME explanation</strong> identifies the local
+                    image features that had the greatest influence on the
+                    prediction.
                   </p>
                 </>
               ) : (
                 <>
                   <p>
-                    The uploaded MRI scan shows no visual indicators consistent with
-                    hemorrhage, and has been classified as{" "}
+                    The uploaded MRI scan shows no visual indicators consistent
+                    with hemorrhage, and has been classified as{" "}
                     <strong>NonHemorrhagic</strong> with a confidence score of{" "}
                     <strong>{mainConfidence.toFixed(2)}%</strong>.
                   </p>
                   <p>
-                    <strong>Estimated hemorrhage likelihood:</strong> {hemorrhagicPct.toFixed(2)}%
+                    <strong>Estimated hemorrhage likelihood:</strong>{" "}
+                    {hemorrhagicPct.toFixed(2)}%
                   </p>
                   <p>
-                    This is a low estimated likelihood based on the model's analysis of this
-                    single scan, not a clinical risk prediction for future events.
+                    This is a low estimated likelihood based on the model's
+                    analysis of this single scan, not a clinical risk prediction
+                    for future events.
                   </p>
                 </>
               )}
 
               <div style={styles.disclaimerBox}>
-                <strong>Note:</strong> This application is intended for educational and
-                research purposes. The predictions should support, not replace, clinical
-                judgment by qualified healthcare professionals.
+                <strong>Note:</strong> This application is intended for educational
+                and research purposes. The predictions should support, not replace,
+                clinical judgment by qualified healthcare professionals.
               </div>
             </div>
           </section>
@@ -284,27 +326,40 @@ function App() {
             <div style={styles.explainabilityGrid}>
               <div style={styles.explainCard}>
                 <h4 style={styles.explainCardTitle}>Grad-CAM</h4>
-                <img src={result.gradcam} alt="Grad-CAM" style={styles.explainImage} />
+                <img
+                  src={resolveImageUrl(result.gradcam)}
+                  alt="Grad-CAM"
+                  style={styles.explainImage}
+                />
                 <p style={styles.explainDesc}>
-                  Highlights the MRI regions that contributed most to the model's prediction.
+                  Highlights the MRI regions that contributed most to the model's
+                  prediction.
                 </p>
               </div>
 
               <div style={styles.explainCard}>
                 <h4 style={styles.explainCardTitle}>Professional Grad-CAM</h4>
-                <img src={result.pro_gradcam} alt="Professional Grad-CAM" style={styles.explainImage} />
+                <img
+                  src={resolveImageUrl(result.pro_gradcam)}
+                  alt="Professional Grad-CAM"
+                  style={styles.explainImage}
+                />
                 <p style={styles.explainDesc}>
-                  Provides a refined visualization of the important regions used by the deep
-                  learning model.
+                  Provides a refined visualization of the important regions used by
+                  the deep learning model.
                 </p>
               </div>
 
               <div style={styles.explainCard}>
                 <h4 style={styles.explainCardTitle}>LIME Explanation</h4>
-                <img src={result.lime} alt="LIME Explanation" style={styles.explainImage} />
+                <img
+                  src={resolveImageUrl(result.lime)}
+                  alt="LIME Explanation"
+                  style={styles.explainImage}
+                />
                 <p style={styles.explainDesc}>
-                  Explains the local image features that influenced the final classification
-                  decision.
+                  Explains the local image features that influenced the final
+                  classification decision.
                 </p>
               </div>
             </div>
@@ -315,15 +370,19 @@ function App() {
       <footer style={styles.footer}>
         <h3 style={styles.footerTitle}>Brain Hemorrhage Detection System</h3>
         <p style={styles.footerSubText}>
-          Deep learning-based MRI analysis using EfficientNet-B0 with explainable AI
-          (Grad-CAM & LIME)
+          Deep learning-based MRI analysis using EfficientNet-B0 with explainable
+          AI (Grad-CAM & LIME)
         </p>
         <hr style={styles.footerLine} />
         <p style={styles.footerCredits}>
           Developed by K. Subba Rao, D. Kowshik Reddy & Sh. Thasleem
         </p>
-        <p style={styles.footerCredits}>Department of Computer Science and Engineering</p>
-        <p style={styles.footerCredits}>Lakireddy Bali Reddy College of Engineering</p>
+        <p style={styles.footerCredits}>
+          Department of Computer Science and Engineering
+        </p>
+        <p style={styles.footerCredits}>
+          Lakireddy Bali Reddy College of Engineering
+        </p>
       </footer>
     </div>
   );
@@ -335,7 +394,8 @@ const styles = {
     minHeight: "100vh",
     width: "100%",
     boxSizing: "border-box",
-    fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif",
+    fontFamily:
+      "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif",
     color: "#0f172a",
     margin: 0,
     padding: 0,
