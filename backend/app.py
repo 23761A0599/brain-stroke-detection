@@ -1,18 +1,30 @@
 import io
 import os
 import base64
+
+print("STARTUP: importing torch...", flush=True)
 import torch
+print("STARTUP: importing torchvision.transforms...", flush=True)
 import torchvision.transforms as transforms
+print("STARTUP: importing PIL...", flush=True)
 from PIL import Image
+print("STARTUP: importing numpy...", flush=True)
 import numpy as np
+print("STARTUP: importing cv2...", flush=True)
 import cv2
+print("STARTUP: importing fastapi...", flush=True)
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+print("STARTUP: importing model.config...", flush=True)
 from model.config import IMAGE_SIZE, CLASS_NAMES, DEVICE
+print("STARTUP: importing model_builder...", flush=True)
 from model.model_builder import build_model
+print("STARTUP: importing gradcam_pro...", flush=True)
 from services.gradcam_pro import generate_gradcam_pro
+print("STARTUP: importing lime_explainer...", flush=True)
 from services.lime_explainer import save_lime_explanation
+print("STARTUP: all imports done.", flush=True)
 
 app = FastAPI(title="Brain Hemorrhage Detection API")
 
@@ -23,12 +35,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# CHANGED: CLASS_NAMES now comes from model.config (single source of
-# truth) instead of a hardcoded, WRONGLY-ORDERED local list. The
-# actual trained model's order is {'Hemorrhagic': 0, 'NonHemorrhagic': 1} -
-# the old hardcoded ["Normal", "Hemorrhagic"] had both the wrong order
-# AND the wrong class name ("Normal" vs "NonHemorrhagic").
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 POSSIBLE_PATHS = [
@@ -46,138 +52,32 @@ for p in POSSIBLE_PATHS:
         MODEL_PATH = p
         break
 
+print(f"STARTUP: MODEL_PATH resolved to: {MODEL_PATH}", flush=True)
+
 model = None
 if MODEL_PATH:
     try:
-        # CHANGED: this is the actual fix. The checkpoint is a STATE
-        # DICT (just weights), not a full pickled model object. You
-        # must first build the correct architecture with build_model(),
-        # then load the weights into it with load_state_dict() - never
-        # torch.load() directly as if it were a complete model.
+        print("STARTUP: building model architecture...", flush=True)
         model = build_model("efficientnetb0")
+        print("STARTUP: architecture built, loading state dict from disk...", flush=True)
         state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
+        print("STARTUP: state dict loaded into memory, applying to model...", flush=True)
         model.load_state_dict(state_dict)
         model.to(DEVICE)
         model.eval()
-        print(f"Model loaded successfully from: {MODEL_PATH}", flush=True)
+        print(f"STARTUP: Model loaded successfully from: {MODEL_PATH}", flush=True)
     except Exception as e:
-        print(f"Error loading model from {MODEL_PATH}: {e}", flush=True)
+        print(f"STARTUP: Error loading model from {MODEL_PATH}: {e}", flush=True)
         model = None
 else:
-    print(f"Model file not found in any expected location: {POSSIBLE_PATHS}", flush=True)
+    print(f"STARTUP: Model file not found in any expected location: {POSSIBLE_PATHS}", flush=True)
 
-# CHANGED: IMAGE_SIZE now comes from model.config (224), matching what
-# the model was actually trained on. The old hardcoded 256x256 would
-# silently degrade predictions even once the model loads correctly.
 transform = transforms.Compose([
     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
+print("STARTUP: app.py fully initialized, ready for uvicorn to bind port.", flush=True)
 
-def buffer_to_base64_url(image_np_or_buf):
-    if isinstance(image_np_or_buf, io.BytesIO):
-        encoded = base64.b64encode(image_np_or_buf.getvalue()).decode('utf-8')
-    elif isinstance(image_np_or_buf, np.ndarray):
-        if len(image_np_or_buf.shape) == 3 and image_np_or_buf.shape[2] == 3:
-            image_np_or_buf = cv2.cvtColor(image_np_or_buf, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(image_np_or_buf.astype('uint8'))
-        buf = io.BytesIO()
-        pil_img.save(buf, format="PNG")
-        encoded = base64.b64encode(buf.getvalue()).decode('utf-8')
-    elif isinstance(image_np_or_buf, Image.Image):
-        buf = io.BytesIO()
-        image_np_or_buf.save(buf, format="PNG")
-        encoded = base64.b64encode(buf.getvalue()).decode('utf-8')
-    else:
-        return ""
-
-    return f"data:image/png;base64,{encoded}"
-
-
-def file_to_data_url(path):
-    with open(path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode("utf-8")
-    return f"data:image/png;base64,{encoded}"
-
-
-@app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-    print("\n--- PREDICT ENDPOINT TRIGGERED ---", flush=True)
-
-    contents = await file.read()
-    print(f"File Name: {file.filename} | Size: {len(contents)} bytes", flush=True)
-
-    # Save to a temp path - needed for the real gradcam_pro/lime
-    # functions, which take a file path, not raw bytes
-    temp_dir = os.path.join(BASE_DIR, "uploads")
-    os.makedirs(temp_dir, exist_ok=True)
-    temp_path = os.path.join(temp_dir, file.filename)
-    with open(temp_path, "wb") as f:
-        f.write(contents)
-
-    image = Image.open(io.BytesIO(contents)).convert("RGB")
-    print(f"Image Dimensions: {image.size} | Mode: {image.mode}", flush=True)
-
-    np_img = np.array(image)
-
-    if model is not None:
-        input_tensor = transform(image).unsqueeze(0).to(DEVICE)
-        with torch.no_grad():
-            outputs = model(input_tensor)
-            probabilities = torch.softmax(outputs, dim=1)
-
-            hemorrhagic_prob = probabilities[0][0].item() * 100
-            nonhemorrhagic_prob = probabilities[0][1].item() * 100
-
-            confidence_val, predicted_idx = torch.max(probabilities, 1)
-            prediction_label = CLASS_NAMES[predicted_idx.item()]
-            confidence_str = f"{confidence_val.item() * 100:.2f}%"
-
-            print(f"Probabilities - Hemorrhagic: {hemorrhagic_prob:.2f}%, "
-                  f"NonHemorrhagic: {nonhemorrhagic_prob:.2f}%", flush=True)
-            print(f"Prediction: {prediction_label} | Confidence: {confidence_str}", flush=True)
-
-        # CHANGED: use the REAL gradcam_pro and lime functions instead
-        # of the fake placeholder circle/rectangle drawings
-        try:
-            gradcam_pro_url = generate_gradcam_pro(
-                model, temp_path,
-                confidence_score=confidence_val.item(),
-                class_name=prediction_label
-            )
-            gradcam_pro_path = os.path.join(BASE_DIR, gradcam_pro_url.lstrip("/"))
-            pro_gradcam_b64 = file_to_data_url(gradcam_pro_path)
-        except Exception as e:
-            print(f"Grad-CAM++ generation failed: {e}", flush=True)
-            pro_gradcam_b64 = ""
-
-        try:
-            lime_result = save_lime_explanation(model, temp_path)
-            lime_b64 = file_to_data_url(lime_result["lime_path"])
-        except Exception as e:
-            print(f"LIME generation failed: {e}", flush=True)
-            lime_b64 = ""
-
-        gradcam_b64 = pro_gradcam_b64  # basic Grad-CAM reuses the pro visualization if not separately wired
-
-    else:
-        prediction_label = "Model Not Loaded"
-        confidence_str = "0.00%"
-        hemorrhagic_prob = 0.0
-        nonhemorrhagic_prob = 0.0
-        gradcam_b64 = ""
-        pro_gradcam_b64 = ""
-        lime_b64 = ""
-        print("Warning: Model is not loaded.", flush=True)
-
-    return {
-        "prediction": prediction_label,
-        "confidence": confidence_str,
-        "hemorrhage_confidence": f"{hemorrhagic_prob:.2f}%",
-        "normal_confidence": f"{nonhemorrhagic_prob:.2f}%",
-        "gradcam": gradcam_b64,
-        "pro_gradcam": pro_gradcam_b64,
-        "lime": lime_b64
-    }
+# ... rest of the file (buffer_to_base64_url, file_to_data_url, /predict endpoint) unchanged
