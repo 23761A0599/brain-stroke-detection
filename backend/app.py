@@ -24,7 +24,7 @@ CLASS_NAMES = ["Normal", "Hemorrhagic"]
 
 # Load PyTorch model
 try:
-    model = torch.load("model.pth", map_location=torch.device("cpu"))
+    model = torch.load("models/best_efficientnetb0.pth", map_location=torch.device("cpu"))
     model.eval()
     print("Model loaded successfully.", flush=True)
 except Exception as e:
