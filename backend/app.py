@@ -1,30 +1,19 @@
 import io
 import os
 import base64
-
-print("STARTUP: importing torch...", flush=True)
 import torch
-print("STARTUP: importing torchvision.transforms...", flush=True)
 import torchvision.transforms as transforms
-print("STARTUP: importing PIL...", flush=True)
 from PIL import Image
-print("STARTUP: importing numpy...", flush=True)
 import numpy as np
-print("STARTUP: importing cv2...", flush=True)
 import cv2
-print("STARTUP: importing fastapi...", flush=True)
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-print("STARTUP: importing model.config...", flush=True)
 from model.config import IMAGE_SIZE, CLASS_NAMES, DEVICE
-print("STARTUP: importing model_builder...", flush=True)
 from model.model_builder import build_model
-print("STARTUP: importing gradcam_pro...", flush=True)
-from services.gradcam_pro import generate_gradcam_pro
-print("STARTUP: importing lime_explainer...", flush=True)
+from services.gradcam import generate_gradcam_map
+from services.gradcam_pro import generate_gradcam_images
 from services.lime_explainer import save_lime_explanation
-print("STARTUP: all imports done.", flush=True)
 
 app = FastAPI(title="Brain Hemorrhage Detection API")
 
@@ -52,25 +41,20 @@ for p in POSSIBLE_PATHS:
         MODEL_PATH = p
         break
 
-print(f"STARTUP: MODEL_PATH resolved to: {MODEL_PATH}", flush=True)
-
 model = None
 if MODEL_PATH:
     try:
-        print("STARTUP: building model architecture...", flush=True)
         model = build_model("efficientnetb0")
-        print("STARTUP: architecture built, loading state dict from disk...", flush=True)
         state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
-        print("STARTUP: state dict loaded into memory, applying to model...", flush=True)
         model.load_state_dict(state_dict)
         model.to(DEVICE)
         model.eval()
-        print(f"STARTUP: Model loaded successfully from: {MODEL_PATH}", flush=True)
+        print(f"Model loaded successfully from: {MODEL_PATH}", flush=True)
     except Exception as e:
-        print(f"STARTUP: Error loading model from {MODEL_PATH}: {e}", flush=True)
+        print(f"Error loading model from {MODEL_PATH}: {e}", flush=True)
         model = None
 else:
-    print(f"STARTUP: Model file not found in any expected location: {POSSIBLE_PATHS}", flush=True)
+    print(f"Model file not found in any expected location: {POSSIBLE_PATHS}", flush=True)
 
 transform = transforms.Compose([
     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
@@ -78,6 +62,94 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-print("STARTUP: app.py fully initialized, ready for uvicorn to bind port.", flush=True)
 
-# ... rest of the file (buffer_to_base64_url, file_to_data_url, /predict endpoint) unchanged
+def file_to_data_url(path):
+    with open(path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
+
+@app.post("/predict")
+async def predict(file: UploadFile = File(...)):
+    print("\n--- PREDICT ENDPOINT TRIGGERED ---", flush=True)
+
+    contents = await file.read()
+    print(f"File Name: {file.filename} | Size: {len(contents)} bytes", flush=True)
+
+    temp_dir = os.path.join(BASE_DIR, "uploads")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, file.filename)
+    with open(temp_path, "wb") as f:
+        f.write(contents)
+
+    image = Image.open(io.BytesIO(contents)).convert("RGB")
+    print(f"Image Dimensions: {image.size} | Mode: {image.mode}", flush=True)
+
+    np_img = np.array(image)
+
+    if model is not None:
+        input_tensor = transform(image).unsqueeze(0).to(DEVICE)
+
+        # Grad-CAM needs a forward+backward pass with gradients enabled,
+        # so this must run BEFORE the no_grad() probability block below.
+        try:
+            cam_map, _ = generate_gradcam_map(model, input_tensor)
+        except Exception as e:
+            print(f"Grad-CAM map generation failed: {e}", flush=True)
+            cam_map = None
+
+        with torch.no_grad():
+            outputs = model(input_tensor)
+            probabilities = torch.softmax(outputs, dim=1)
+
+            hemorrhagic_prob = probabilities[0][0].item() * 100
+            nonhemorrhagic_prob = probabilities[0][1].item() * 100
+
+            confidence_val, predicted_idx = torch.max(probabilities, 1)
+            prediction_label = CLASS_NAMES[predicted_idx.item()]
+            confidence_str = f"{confidence_val.item() * 100:.2f}%"
+
+            print(f"Probabilities - Hemorrhagic: {hemorrhagic_prob:.2f}%, "
+                  f"NonHemorrhagic: {nonhemorrhagic_prob:.2f}%", flush=True)
+            print(f"Prediction: {prediction_label} | Confidence: {confidence_str}", flush=True)
+
+        try:
+            orig_bgr = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+            result_paths = generate_gradcam_images(
+                orig_bgr, cam_map,
+                confidence_score=confidence_val.item(),
+                class_name=prediction_label
+            )
+            gradcam_b64 = file_to_data_url(os.path.join(BASE_DIR, result_paths["gradcam"]))
+            pro_gradcam_b64 = file_to_data_url(os.path.join(BASE_DIR, result_paths["gradcam_pro"]))
+        except Exception as e:
+            print(f"Grad-CAM image generation failed: {e}", flush=True)
+            gradcam_b64 = ""
+            pro_gradcam_b64 = ""
+
+        try:
+            lime_result = save_lime_explanation(model, temp_path)
+            lime_b64 = file_to_data_url(lime_result["lime_path"])
+        except Exception as e:
+            print(f"LIME generation failed: {e}", flush=True)
+            lime_b64 = ""
+
+    else:
+        prediction_label = "Model Not Loaded"
+        confidence_str = "0.00%"
+        hemorrhagic_prob = 0.0
+        nonhemorrhagic_prob = 0.0
+        gradcam_b64 = ""
+        pro_gradcam_b64 = ""
+        lime_b64 = ""
+        print("Warning: Model is not loaded.", flush=True)
+
+    return {
+        "prediction": prediction_label,
+        "confidence": confidence_str,
+        "hemorrhage_confidence": f"{hemorrhagic_prob:.2f}%",
+        "normal_confidence": f"{nonhemorrhagic_prob:.2f}%",
+        "gradcam": gradcam_b64,
+        "pro_gradcam": pro_gradcam_b64,
+        "lime": lime_b64
+    }
