@@ -45,10 +45,10 @@ def _normalized_cam(cam_map, h, w):
                              (cam_resized.max() - cam_resized.min() + 1e-8))
     else:
         cam_norm = np.zeros((h, w), dtype=np.uint8)
-    return cv2.GaussianBlur(cam_norm, (17, 17), 0)
+    return cv2.GaussianBlur(cam_norm, (11, 11), 0)
 
 
-def _significant_mask(smooth_cam, percentile=88):
+def _significant_mask(smooth_cam, percentile=92):
     h, w = smooth_cam.shape
     min_area = max(18, int(h * w * 0.004))
 
@@ -69,9 +69,9 @@ def _significant_mask(smooth_cam, percentile=88):
 
 def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
     """
-    STYLE 3: RADIAL GLOW - a soft gradient that's brightest at the center
-    of the affected region and fades outward, with one smooth outline.
-    No segment grid, no jigsaw pattern.
+    Flat, solid highlight (single color, no gradient) with a clean outline.
+    Deliberately different from Grad-CAM's multi-color glow so the two
+    panels don't look like duplicates of each other.
     """
     timestamp = int(time.time())
 
@@ -89,25 +89,22 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
     if is_hemorrhage and cam_map is not None:
         h, w = gray.shape
         smooth_cam = _normalized_cam(cam_map, h, w)
-        clean_mask = _significant_mask(smooth_cam, percentile=88)
+        clean_mask = _significant_mask(smooth_cam, percentile=92)
 
         if np.any(clean_mask):
-            dist = cv2.distanceTransform(clean_mask, cv2.DIST_L2, 5)
-            dist_norm = np.uint8(255 * dist / (dist.max() + 1e-8))
-            glow_color = cv2.applyColorMap(dist_norm, cv2.COLORMAP_HOT)
+            flat_color = np.zeros_like(result)
+            flat_color[:] = (40, 40, 235)  # solid red-orange, BGR - no gradient
 
-            feather = cv2.GaussianBlur(clean_mask, (15, 15), 0)
-            alpha = (feather.astype(np.float32) / 255.0)[..., None]
-            blended = result.astype(np.float32) * (1 - alpha * 0.78) + \
-                glow_color.astype(np.float32) * (alpha * 0.78)
-            result = blended.astype(np.uint8)
+            alpha_flat = (clean_mask.astype(np.float32) / 255.0)[..., None] * 0.55
+            result = (result.astype(np.float32) * (1 - alpha_flat) +
+                      flat_color.astype(np.float32) * alpha_flat).astype(np.uint8)
 
             contours, _ = cv2.findContours(clean_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             for c in contours:
                 if cv2.contourArea(c) > 15:
                     epsilon = 0.006 * cv2.arcLength(c, True)
                     approx = cv2.approxPolyDP(c, epsilon, True)
-                    cv2.polylines(result, [approx], True, (255, 255, 255), 1, cv2.LINE_AA)
+                    cv2.polylines(result, [approx], True, (255, 255, 255), 2, cv2.LINE_AA)
 
         result = add_label_banner(result, "LIME", label_text, accent=(50, 50, 235))
     else:
