@@ -40,16 +40,24 @@ async def predict(file: UploadFile = File(...)):
         # 3. Compute Grad-CAM activation map from model
         cam_map, pred_class_idx = generate_gradcam_map(model, image_tensor)
 
-        # Get confidence probability score from model outputs
+        # 4. Correct Probability Score Calculation (Binary vs Multi-Class)
         with torch.no_grad():
             outputs = model(image_tensor)
-            probs = torch.softmax(outputs, dim=1)[0]
-            confidence = probs[pred_class_idx].item()
+            if outputs.shape[1] == 1:
+                # Binary output node (Sigmoid activation)
+                prob = torch.sigmoid(outputs).item()
+                pred_class_idx = 1 if prob >= 0.5 else 0
+                confidence = prob if pred_class_idx == 1 else (1.0 - prob)
+            else:
+                # Multi-class output nodes (Softmax activation)
+                probs = torch.softmax(outputs, dim=1)[0]
+                pred_class_idx = torch.argmax(probs).item()
+                confidence = probs[pred_class_idx].item()
 
         predicted_label = CLASS_NAMES[pred_class_idx]
-        is_hemorrhagic = "hemorrhag" in predicted_label.lower() or pred_class_idx == 0
+        is_hemorrhagic = "hemorrhag" in predicted_label.lower() or pred_class_idx == 1
 
-        # 4. Generate visual overlays if classification is Hemorrhagic
+        # 5. Generate visual overlays if classification is Hemorrhagic
         if is_hemorrhagic:
             img_paths = generate_gradcam_images(
                 orig_bgr=orig_bgr,
