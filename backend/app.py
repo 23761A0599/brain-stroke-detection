@@ -128,7 +128,9 @@ async def predict(file: UploadFile = File(...)):
             pro_gradcam_b64 = ""
 
         try:
-            lime_result = save_lime_explanation(model, temp_path)
+            lime_result = save_lime_explanation(
+                temp_path, cam_map, confidence_val.item(), prediction_label
+            )
             lime_b64 = file_to_data_url(lime_result["lime_path"])
         except Exception as e:
             print(f"LIME generation failed: {e}", flush=True)
