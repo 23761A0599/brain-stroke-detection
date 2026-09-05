@@ -39,46 +39,36 @@ def add_label_banner(img, title, subtitle, accent=(0, 200, 255)):
     return img
 
 
-def normalized_cam(cam_map, h, w):
-    if cam_map is not None and np.max(cam_map) > 0:
-        cam_resized = cv2.resize(cam_map, (w, h))
-        cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) /
-                             (cam_resized.max() - cam_resized.min() + 1e-8))
-    else:
-        cam_norm = np.zeros((h, w), dtype=np.uint8)
-    return cv2.GaussianBlur(cam_norm, (11, 11), 0)  # tighter blur = less spread
+def isolate_primary_hemorrhage(cam_map, h, w, percentile=92):
+    """Normalize CAM map and retain ONLY the largest/strongest primary activation cluster."""
+    if cam_map is None or np.max(cam_map) <= 0:
+        return np.zeros((h, w), dtype=np.uint8), np.zeros((h, w), dtype=np.uint8), None, None
 
+    cam_resized = cv2.resize(cam_map, (w, h))
+    cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) / (cam_resized.max() - cam_resized.min() + 1e-8))
+    smooth_cam = cv2.GaussianBlur(cam_norm, (11, 11), 0)
 
-def significant_mask(smooth_cam, percentile=92):
-    """Keep only the strongest activation region - raised threshold for tighter, cleaner highlights."""
-    h, w = smooth_cam.shape
-    min_area = max(18, int(h * w * 0.004))
-
+    # Threshold top intensity region
     thresh_val = np.percentile(smooth_cam, percentile)
     _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
-    binary = binary.astype(np.uint8)
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
 
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return smooth_cam, np.zeros((h, w), dtype=np.uint8), None, None
+
+    # Keep strictly the largest active region (eliminates secondary/false clusters)
+    primary_contour = max(contours, key=cv2.contourArea)
     clean_mask = np.zeros_like(binary)
-    kept = []
-    for c in contours:
-        if cv2.contourArea(c) >= min_area:
-            cv2.drawContours(clean_mask, [c], -1, 255, -1)
-            kept.append(c)
+    cv2.drawContours(clean_mask, [primary_contour], -1, 255, -1)
 
-    return clean_mask, kept
+    # Find center peak within primary region
+    masked_cam = smooth_cam.copy()
+    masked_cam[clean_mask == 0] = 0
+    y, x = np.unravel_index(np.argmax(masked_cam), masked_cam.shape)
 
-
-def peak_point(smooth_cam, clean_mask):
-    """Exact pixel location of strongest activation - used to aim the marker precisely."""
-    masked = smooth_cam.copy()
-    masked[clean_mask == 0] = 0
-    if masked.max() <= 0:
-        return None
-    y, x = np.unravel_index(np.argmax(masked), masked.shape)
-    return int(x), int(y)
+    return smooth_cam, clean_mask, primary_contour, (int(x), int(y))
 
 
 def generate_gradcam_images(orig_bgr, cam_map, confidence_score, class_name):
@@ -88,58 +78,50 @@ def generate_gradcam_images(orig_bgr, cam_map, confidence_score, class_name):
         orig_bgr = cv2.cvtColor(orig_bgr, cv2.COLOR_GRAY2BGR)
 
     h, w, _ = orig_bgr.shape
-    smooth_cam = normalized_cam(cam_map, h, w)
-    clean_mask, contours = significant_mask(smooth_cam, percentile=92)
+    smooth_cam, clean_mask, primary_contour, peak = isolate_primary_hemorrhage(cam_map, h, w, percentile=92)
     label_text = f"{class_name}  |  {confidence_score * 100:.1f}% confidence"
 
-    # ---- Grad-CAM: colored gradient glow, tightened ----
+    # ==================== 1. STANDARD GRAD-CAM ====================
     masked_cam = smooth_cam.copy()
     masked_cam[clean_mask == 0] = 0
-    if masked_cam.max() > 0:
-        inside = masked_cam[clean_mask > 0]
-        stretched = np.zeros_like(masked_cam)
-        stretched[clean_mask > 0] = np.uint8(
-            255 * (inside.astype(np.float32) - inside.min()) /
-            (inside.max() - inside.min() + 1e-8)
-        )
-    else:
-        stretched = masked_cam
 
-    glow_color = cv2.applyColorMap(stretched, cv2.COLORMAP_INFERNO)
+    glow_color = cv2.applyColorMap(masked_cam, cv2.COLORMAP_INFERNO)
     feather = cv2.GaussianBlur(clean_mask, (15, 15), 0)
     alpha = (feather.astype(np.float32) / 255.0)[..., None]
 
     base = orig_bgr.astype(np.float32)
-    blended = base * (1 - alpha * 0.78) + glow_color.astype(np.float32) * (alpha * 0.78)
-    heat_result = blended.astype(np.uint8)
-    heat_result = add_label_banner(heat_result, "Grad-CAM", label_text, accent=(60, 60, 240))
+    blended = base * (1 - alpha * 0.82) + glow_color.astype(np.float32) * (alpha * 0.82)
+    heat_result = add_label_banner(blended.astype(np.uint8), "Grad-CAM", label_text, accent=(60, 60, 240))
 
     std_path = f"outputs/gradcam/heat_{timestamp}.png"
     cv2.imwrite(std_path, heat_result)
 
-    # ---- Professional Grad-CAM: fixed-size brackets locked onto the EXACT peak point ----
-    # (no longer follows the loose/blurry contour shape, so it can never span the whole image)
+    # ==================== 2. PROFESSIONAL GRAD-CAM ====================
     pro_result = orig_bgr.copy()
-    peak = peak_point(smooth_cam, clean_mask)
-    accent = (0, 215, 255)
+    accent = (0, 215, 255)  # Bright Gold Accent
 
-    if peak:
-        cx, cy = peak
-        half = int(min(w, h) * 0.15)  # fixed, tight footprint regardless of blob size
-        x1, y1 = max(cx - half, 0), max(cy - half, 0)
-        x2, y2 = min(cx + half, w - 1), min(cy + half, h - 1)
-        arm = int(half * 0.55) + 4
-
+    if primary_contour is not None and peak is not None:
+        bx, by, bw, bh = cv2.boundingRect(primary_contour)
+        
+        # Add padding around bounding box
+        pad = 8
+        x1, y1 = max(bx - pad, 0), max(by - pad, 0)
+        x2, y2 = min(bx + bw + pad, w - 1), min(by + bh + pad, h - 1)
+        
+        arm = int(min(bw, bh) * 0.25) + 4
         corners = [(x1, y1, 1, 1), (x2, y1, -1, 1), (x1, y2, 1, -1), (x2, y2, -1, -1)]
+
+        # Tactical Corner Brackets
         for cxp, cyp, dx, dy in corners:
             cv2.line(pro_result, (cxp, cyp), (cxp + dx * arm, cyp), accent, 2, cv2.LINE_AA)
             cv2.line(pro_result, (cxp, cyp), (cxp, cyp + dy * arm), accent, 2, cv2.LINE_AA)
 
-        cv2.circle(pro_result, (cx, cy), 4, accent, -1, cv2.LINE_AA)
-        cv2.circle(pro_result, (cx, cy), 8, accent, 1, cv2.LINE_AA)
+        # Center Precision Crosshair
+        cx, cy = peak
+        cv2.drawMarker(pro_result, (cx, cy), accent, cv2.MARKER_CROSS, 12, 1, cv2.LINE_AA)
+        cv2.circle(pro_result, (cx, cy), 3, accent, -1, cv2.LINE_AA)
 
     pro_result = add_label_banner(pro_result, "Focus Region", label_text, accent=accent)
-
     pro_path = f"outputs/gradcam_pro/target_{timestamp}.png"
     cv2.imwrite(pro_path, pro_result)
 

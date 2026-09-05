@@ -10,7 +10,7 @@ LIME_DIR = Path("outputs") / "lime"
 LIME_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def add_label_banner(img, title, subtitle, accent=(60, 220, 90)):
+def add_label_banner(img, title, subtitle, accent=(0, 230, 255)):
     h, w = img.shape[:2]
     banner_h = max(46, int(h * 0.20))
     overlay = img.copy()
@@ -38,41 +38,7 @@ def add_label_banner(img, title, subtitle, accent=(60, 220, 90)):
     return img
 
 
-def _normalized_cam(cam_map, h, w):
-    if cam_map is not None and np.max(cam_map) > 0:
-        cam_resized = cv2.resize(cam_map, (w, h))
-        cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) /
-                             (cam_resized.max() - cam_resized.min() + 1e-8))
-    else:
-        cam_norm = np.zeros((h, w), dtype=np.uint8)
-    return cv2.GaussianBlur(cam_norm, (11, 11), 0)
-
-
-def _significant_mask(smooth_cam, percentile=92):
-    h, w = smooth_cam.shape
-    min_area = max(18, int(h * w * 0.004))
-
-    thresh_val = np.percentile(smooth_cam, percentile)
-    _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
-    binary = binary.astype(np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
-
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    clean_mask = np.zeros_like(binary)
-    for c in contours:
-        if cv2.contourArea(c) >= min_area:
-            cv2.drawContours(clean_mask, [c], -1, 255, -1)
-
-    return clean_mask
-
-
 def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
-    """
-    Flat, solid highlight (single color, no gradient) with a clean outline.
-    Deliberately different from Grad-CAM's multi-color glow so the two
-    panels don't look like duplicates of each other.
-    """
     timestamp = int(time.time())
 
     raw_img = Image.open(image_path).convert("RGB")
@@ -88,27 +54,40 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
 
     if is_hemorrhage and cam_map is not None:
         h, w = gray.shape
-        smooth_cam = _normalized_cam(cam_map, h, w)
-        clean_mask = _significant_mask(smooth_cam, percentile=92)
+        cam_resized = cv2.resize(cam_map, (w, h))
+        cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) / (cam_resized.max() - cam_resized.min() + 1e-8))
+        smooth_cam = cv2.GaussianBlur(cam_norm, (11, 11), 0)
 
-        if np.any(clean_mask):
-            flat_color = np.zeros_like(result)
-            flat_color[:] = (40, 40, 235)  # solid red-orange, BGR - no gradient
+        # Threshold to get top region
+        thresh_val = np.percentile(smooth_cam, 92)
+        _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
+        binary = binary.astype(np.uint8)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
 
-            alpha_flat = (clean_mask.astype(np.float32) / 255.0)[..., None] * 0.55
-            result = (result.astype(np.float32) * (1 - alpha_flat) +
-                      flat_color.astype(np.float32) * alpha_flat).astype(np.uint8)
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            contours, _ = cv2.findContours(clean_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            for c in contours:
-                if cv2.contourArea(c) > 15:
-                    epsilon = 0.006 * cv2.arcLength(c, True)
-                    approx = cv2.approxPolyDP(c, epsilon, True)
-                    cv2.polylines(result, [approx], True, (255, 255, 255), 2, cv2.LINE_AA)
+        if contours:
+            # Select ONLY the largest primary contour
+            primary_contour = max(contours, key=cv2.contourArea)
+            hull = cv2.convexHull(primary_contour)
 
-        result = add_label_banner(result, "LIME", label_text, accent=(50, 50, 235))
+            mask = np.zeros_like(gray)
+            cv2.drawContours(mask, [hull], -1, 255, -1)
+
+            # Red Tinted Polygon Overlay
+            red_overlay = np.zeros_like(result)
+            red_overlay[:] = (30, 30, 220)  # BGR Red
+
+            alpha = (mask.astype(np.float32) / 255.0)[..., None] * 0.45
+            result = (result.astype(np.float32) * (1 - alpha) + red_overlay.astype(np.float32) * alpha).astype(np.uint8)
+
+            # High-Contrast Cyan Border Line
+            cv2.drawContours(result, [hull], -1, (255, 230, 0), 2, cv2.LINE_AA)
+
+        result = add_label_banner(result, "LIME Segment", label_text, accent=(255, 200, 0))
     else:
-        result = add_label_banner(result, "LIME", label_text, accent=(60, 220, 90))
+        result = add_label_banner(result, "LIME Segment", label_text, accent=(60, 220, 90))
 
     filename = f"lime_{timestamp}.png"
     output_path = LIME_DIR / filename
