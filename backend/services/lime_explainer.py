@@ -3,7 +3,6 @@ import time
 import cv2
 import numpy as np
 from PIL import Image
-from skimage.segmentation import slic, mark_boundaries
 
 from model.config import IMAGE_SIZE
 
@@ -50,8 +49,6 @@ def _normalized_cam(cam_map, h, w):
 
 
 def _significant_mask(smooth_cam, percentile=88):
-    """Identical logic to gradcam_pro.py's significant_mask, kept in sync
-    so LIME's red patches line up with the other two panels."""
     h, w = smooth_cam.shape
     min_area = max(18, int(h * w * 0.004))
 
@@ -71,6 +68,11 @@ def _significant_mask(smooth_cam, percentile=88):
 
 
 def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
+    """
+    STYLE 3: RADIAL GLOW - a soft gradient that's brightest at the center
+    of the affected region and fades outward, with one smooth outline.
+    No segment grid, no jigsaw pattern.
+    """
     timestamp = int(time.time())
 
     raw_img = Image.open(image_path).convert("RGB")
@@ -82,30 +84,33 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
 
     is_hemorrhage = "hemorrhag" in class_name.lower()
     label_text = f"{class_name}  |  {confidence_score * 100:.1f}% confidence"
-
-    segments = slic(img_np, n_segments=70, compactness=10, start_label=1)
-    result_bgr = gray_bgr.copy()
+    result = gray_bgr.copy()
 
     if is_hemorrhage and cam_map is not None:
         h, w = gray.shape
         smooth_cam = _normalized_cam(cam_map, h, w)
         clean_mask = _significant_mask(smooth_cam, percentile=88)
-        hot = clean_mask > 0
 
-        for seg_val in np.unique(segments):
-            seg_mask = (segments == seg_val)
-            overlap_frac = np.sum(hot[seg_mask]) / max(np.sum(seg_mask), 1)
-            if overlap_frac > 0.35:
-                result_bgr[seg_mask] = (
-                    result_bgr[seg_mask] * 0.25 + np.array([40, 40, 235]) * 0.75
-                )
+        if np.any(clean_mask):
+            dist = cv2.distanceTransform(clean_mask, cv2.DIST_L2, 5)
+            dist_norm = np.uint8(255 * dist / (dist.max() + 1e-8))
+            glow_color = cv2.applyColorMap(dist_norm, cv2.COLORMAP_HOT)
 
-        marked = mark_boundaries(result_bgr, segments, color=(0.55, 0.55, 0.55))
-        result = np.uint8(marked * 255)
+            feather = cv2.GaussianBlur(clean_mask, (15, 15), 0)
+            alpha = (feather.astype(np.float32) / 255.0)[..., None]
+            blended = result.astype(np.float32) * (1 - alpha * 0.78) + \
+                glow_color.astype(np.float32) * (alpha * 0.78)
+            result = blended.astype(np.uint8)
+
+            contours, _ = cv2.findContours(clean_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for c in contours:
+                if cv2.contourArea(c) > 15:
+                    epsilon = 0.006 * cv2.arcLength(c, True)
+                    approx = cv2.approxPolyDP(c, epsilon, True)
+                    cv2.polylines(result, [approx], True, (255, 255, 255), 1, cv2.LINE_AA)
+
         result = add_label_banner(result, "LIME", label_text, accent=(50, 50, 235))
     else:
-        marked = mark_boundaries(result_bgr, segments, color=(0.5, 0.5, 0.5))
-        result = np.uint8(marked * 255)
         result = add_label_banner(result, "LIME", label_text, accent=(60, 220, 90))
 
     filename = f"lime_{timestamp}.png"
