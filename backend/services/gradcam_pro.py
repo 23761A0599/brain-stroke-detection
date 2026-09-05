@@ -39,14 +39,40 @@ def add_label_banner(img, title, subtitle, accent=(0, 200, 255)):
     return img
 
 
-def _normalized_cam(cam_map, h, w):
+def normalized_cam(cam_map, h, w):
     if cam_map is not None and np.max(cam_map) > 0:
         cam_resized = cv2.resize(cam_map, (w, h))
         cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) /
                              (cam_resized.max() - cam_resized.min() + 1e-8))
     else:
         cam_norm = np.zeros((h, w), dtype=np.uint8)
-    return cv2.GaussianBlur(cam_norm, (21, 21), 0)
+    return cv2.GaussianBlur(cam_norm, (17, 17), 0)
+
+
+def significant_mask(smooth_cam, percentile=88):
+    """
+    Shared logic: threshold to the top activation values, then clean up
+    with morphology so tiny noise specks are dropped. Both the heat-zone
+    view and the circled view use THIS exact mask, so they always agree.
+    """
+    h, w = smooth_cam.shape
+    min_area = max(18, int(h * w * 0.004))
+
+    thresh_val = np.percentile(smooth_cam, percentile)
+    _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
+    binary = binary.astype(np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    clean_mask = np.zeros_like(binary)
+    kept_contours = []
+    for c in contours:
+        if cv2.contourArea(c) >= min_area:
+            cv2.drawContours(clean_mask, [c], -1, 255, -1)
+            kept_contours.append(c)
+
+    return clean_mask, kept_contours
 
 
 def generate_gradcam_images(orig_bgr, cam_map, confidence_score, class_name):
@@ -56,40 +82,35 @@ def generate_gradcam_images(orig_bgr, cam_map, confidence_score, class_name):
         orig_bgr = cv2.cvtColor(orig_bgr, cv2.COLOR_GRAY2BGR)
 
     h, w, _ = orig_bgr.shape
-    smooth_cam = _normalized_cam(cam_map, h, w)
+    smooth_cam = normalized_cam(cam_map, h, w)
+    clean_mask, contours = significant_mask(smooth_cam, percentile=88)
     label_text = f"{class_name}  |  {confidence_score * 100:.1f}% confidence"
 
-    # ---- 1. HEAT ZONE - only the top ~10% most active pixels, feathered ----
-    thresh_val = np.percentile(smooth_cam, 90)
-    mask = (smooth_cam >= thresh_val).astype(np.uint8) * 255
-    mask = cv2.GaussianBlur(mask, (27, 27), 0)
-    alpha_mask = (mask.astype(np.float32) / 255.0)[..., None]
+    # ---- 1. HEAT ZONE - only the cleaned significant region, soft feather ----
+    feathered = cv2.GaussianBlur(clean_mask, (19, 19), 0)
+    alpha_mask = (feathered.astype(np.float32) / 255.0)[..., None]
 
     heat_color = cv2.applyColorMap(smooth_cam, cv2.COLORMAP_JET).astype(np.float32)
     base = orig_bgr.astype(np.float32)
-    blended = base * (1 - alpha_mask * 0.7) + heat_color * (alpha_mask * 0.7)
+    blended = base * (1 - alpha_mask * 0.72) + heat_color * (alpha_mask * 0.72)
     heat_result = blended.astype(np.uint8)
     heat_result = add_label_banner(heat_result, "Grad-CAM", label_text, accent=(60, 60, 240))
 
     std_path = f"outputs/gradcam/heat_{timestamp}.png"
     cv2.imwrite(std_path, heat_result)
 
-    # ---- 2. CIRCLED FOCUS - single tight circle around the hottest core ----
-    _, binary = cv2.threshold(smooth_cam, 190, 255, cv2.THRESH_BINARY)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+    # ---- 2. CIRCLED FOCUS - a circle around EVERY significant region ----
+    # (matches Grad-CAM, instead of only marking the single largest one)
     pro_result = orig_bgr.copy()
-    if contours:
-        largest = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(largest) > 15:
-            (cx, cy), radius = cv2.minEnclosingCircle(largest)
-            radius = int(radius * 1.15)
-            center = (int(cx), int(cy))
-            overlay = pro_result.copy()
-            cv2.circle(overlay, center, radius, (50, 50, 255), -1)
-            pro_result = cv2.addWeighted(pro_result, 0.85, overlay, 0.15, 0)
-            cv2.circle(pro_result, center, radius, (0, 215, 255), 2, cv2.LINE_AA)
+    ranked = sorted(contours, key=cv2.contourArea, reverse=True)[:3]
+    for cnt in ranked:
+        (cx, cy), radius = cv2.minEnclosingCircle(cnt)
+        radius = int(radius * 1.2) + 4
+        center = (int(cx), int(cy))
+        overlay = pro_result.copy()
+        cv2.circle(overlay, center, radius, (50, 50, 255), -1)
+        pro_result = cv2.addWeighted(pro_result, 0.87, overlay, 0.13, 0)
+        cv2.circle(pro_result, center, radius, (0, 215, 255), 2, cv2.LINE_AA)
 
     pro_result = add_label_banner(pro_result, "Focus Region", label_text, accent=(0, 215, 255))
 

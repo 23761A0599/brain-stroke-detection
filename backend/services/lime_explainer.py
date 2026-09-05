@@ -39,12 +39,38 @@ def add_label_banner(img, title, subtitle, accent=(60, 220, 90)):
     return img
 
 
+def _normalized_cam(cam_map, h, w):
+    if cam_map is not None and np.max(cam_map) > 0:
+        cam_resized = cv2.resize(cam_map, (w, h))
+        cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) /
+                             (cam_resized.max() - cam_resized.min() + 1e-8))
+    else:
+        cam_norm = np.zeros((h, w), dtype=np.uint8)
+    return cv2.GaussianBlur(cam_norm, (17, 17), 0)
+
+
+def _significant_mask(smooth_cam, percentile=88):
+    """Identical logic to gradcam_pro.py's significant_mask, kept in sync
+    so LIME's red patches line up with the other two panels."""
+    h, w = smooth_cam.shape
+    min_area = max(18, int(h * w * 0.004))
+
+    thresh_val = np.percentile(smooth_cam, percentile)
+    _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
+    binary = binary.astype(np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    clean_mask = np.zeros_like(binary)
+    for c in contours:
+        if cv2.contourArea(c) >= min_area:
+            cv2.drawContours(clean_mask, [c], -1, 255, -1)
+
+    return clean_mask
+
+
 def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
-    """
-    Colors ONLY the superpixels that overlap the model's actual attention
-    region (same cam_map used for Grad-CAM), so all three explainability
-    panels agree with each other instead of using unrelated heuristics.
-    """
     timestamp = int(time.time())
 
     raw_img = Image.open(image_path).convert("RGB")
@@ -60,22 +86,22 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
     segments = slic(img_np, n_segments=70, compactness=10, start_label=1)
     result_bgr = gray_bgr.copy()
 
-    if is_hemorrhage and cam_map is not None and np.max(cam_map) > 0:
-        cam_resized = cv2.resize(cam_map, (IMAGE_SIZE, IMAGE_SIZE))
-        thresh_val = np.percentile(cam_resized, 85)
-        hot_mask = cam_resized >= thresh_val
+    if is_hemorrhage and cam_map is not None:
+        h, w = gray.shape
+        smooth_cam = _normalized_cam(cam_map, h, w)
+        clean_mask = _significant_mask(smooth_cam, percentile=88)
+        hot = clean_mask > 0
 
         for seg_val in np.unique(segments):
             seg_mask = (segments == seg_val)
-            overlap_frac = np.sum(hot_mask[seg_mask]) / max(np.sum(seg_mask), 1)
+            overlap_frac = np.sum(hot[seg_mask]) / max(np.sum(seg_mask), 1)
             if overlap_frac > 0.35:
-                # blend in BGR order directly - no channel-swap conversion after this
                 result_bgr[seg_mask] = (
                     result_bgr[seg_mask] * 0.25 + np.array([40, 40, 235]) * 0.75
                 )
 
         marked = mark_boundaries(result_bgr, segments, color=(0.55, 0.55, 0.55))
-        result = np.uint8(marked * 255)  # already BGR - do NOT convert again
+        result = np.uint8(marked * 255)
         result = add_label_banner(result, "LIME", label_text, accent=(50, 50, 235))
     else:
         marked = mark_boundaries(result_bgr, segments, color=(0.5, 0.5, 0.5))
