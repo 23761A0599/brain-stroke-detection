@@ -64,9 +64,23 @@ transform = transforms.Compose([
 
 
 def file_to_data_url(path):
-    with open(path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode("utf-8")
-    return f"data:image/png;base64,{encoded}"
+    if not path:
+        return ""
+    
+    # Resolve relative path to absolute path if necessary
+    full_path = path if os.path.isabs(path) else os.path.join(BASE_DIR, path)
+    
+    if not os.path.exists(full_path):
+        print(f"Warning: File not found for base64 conversion: {full_path}", flush=True)
+        return ""
+
+    try:
+        with open(full_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:image/png;base64,{encoded}"
+    except Exception as e:
+        print(f"Failed to read file for base64 encoding ({full_path}): {e}", flush=True)
+        return ""
 
 
 @app.post("/predict")
@@ -90,8 +104,6 @@ async def predict(file: UploadFile = File(...)):
     if model is not None:
         input_tensor = transform(image).unsqueeze(0).to(DEVICE)
 
-        # Grad-CAM needs a forward+backward pass with gradients enabled,
-        # so this must run BEFORE the no_grad() probability block below.
         try:
             cam_map, _ = generate_gradcam_map(model, input_tensor)
         except Exception as e:
@@ -109,8 +121,7 @@ async def predict(file: UploadFile = File(...)):
             prediction_label = CLASS_NAMES[predicted_idx.item()]
             confidence_str = f"{confidence_val.item() * 100:.2f}%"
 
-            print(f"Probabilities - Hemorrhagic: {hemorrhagic_prob:.2f}%, "
-                  f"NonHemorrhagic: {nonhemorrhagic_prob:.2f}%", flush=True)
+            print(f"Probabilities - Hemorrhagic: {hemorrhagic_prob:.2f}%, NonHemorrhagic: {nonhemorrhagic_prob:.2f}%", flush=True)
             print(f"Prediction: {prediction_label} | Confidence: {confidence_str}", flush=True)
 
         try:
@@ -120,8 +131,8 @@ async def predict(file: UploadFile = File(...)):
                 confidence_score=confidence_val.item(),
                 class_name=prediction_label
             )
-            gradcam_b64 = file_to_data_url(os.path.join(BASE_DIR, result_paths["gradcam"]))
-            pro_gradcam_b64 = file_to_data_url(os.path.join(BASE_DIR, result_paths["gradcam_pro"]))
+            gradcam_b64 = file_to_data_url(result_paths.get("gradcam", ""))
+            pro_gradcam_b64 = file_to_data_url(result_paths.get("gradcam_pro", ""))
         except Exception as e:
             print(f"Grad-CAM image generation failed: {e}", flush=True)
             gradcam_b64 = ""
@@ -131,7 +142,7 @@ async def predict(file: UploadFile = File(...)):
             lime_result = save_lime_explanation(
                 temp_path, cam_map, confidence_val.item(), prediction_label
             )
-            lime_b64 = file_to_data_url(lime_result["lime_path"])
+            lime_b64 = file_to_data_url(lime_result.get("lime_path", ""))
         except Exception as e:
             print(f"LIME generation failed: {e}", flush=True)
             lime_b64 = ""

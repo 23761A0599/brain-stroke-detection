@@ -326,11 +326,15 @@ function App() {
             <div style={styles.explainabilityGrid}>
               <div style={styles.explainCard}>
                 <h4 style={styles.explainCardTitle}>Grad-CAM</h4>
-                <img
-                  src={resolveImageUrl(result.gradcam)}
-                  alt="Grad-CAM"
-                  style={styles.explainImage}
-                />
+                {resolveImageUrl(result.gradcam) ? (
+                  <img
+                    src={resolveImageUrl(result.gradcam)}
+                    alt="Grad-CAM"
+                    style={styles.explainImage}
+                  />
+                ) : (
+                  <p style={styles.missingImageText}>Grad-CAM image unavailable</p>
+                )}
                 <p style={styles.explainDesc}>
                   Highlights the MRI regions that contributed most to the model's
                   prediction.
@@ -339,11 +343,15 @@ function App() {
 
               <div style={styles.explainCard}>
                 <h4 style={styles.explainCardTitle}>Professional Grad-CAM</h4>
-                <img
-                  src={resolveImageUrl(result.pro_gradcam)}
-                  alt="Professional Grad-CAM"
-                  style={styles.explainImage}
-                />
+                {resolveImageUrl(result.pro_gradcam) ? (
+                  <img
+                    src={resolveImageUrl(result.pro_gradcam)}
+                    alt="Professional Grad-CAM"
+                    style={styles.explainImage}
+                  />
+                ) : (
+                  <p style={styles.missingImageText}>Professional Grad-CAM image unavailable</p>
+                )}
                 <p style={styles.explainDesc}>
                   Provides a refined visualization of the important regions used by
                   the deep learning model.
@@ -352,11 +360,15 @@ function App() {
 
               <div style={styles.explainCard}>
                 <h4 style={styles.explainCardTitle}>LIME Explanation</h4>
-                <img
-                  src={resolveImageUrl(result.lime)}
-                  alt="LIME Explanation"
-                  style={styles.explainImage}
-                />
+                {resolveImageUrl(result.lime) ? (
+                  <img
+                    src={resolveImageUrl(result.lime)}
+                    alt="LIME Explanation"
+                    style={styles.explainImage}
+                  />
+                ) : (
+                  <p style={styles.missingImageText}>LIME image unavailable</p>
+                )}
                 <p style={styles.explainDesc}>
                   Explains the local image features that influenced the final
                   classification decision.
@@ -625,6 +637,9 @@ const styles = {
     border: "1px solid #dbeafe",
     borderRadius: "12px",
     padding: "16px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
   explainCardTitle: {
     fontSize: "15px",
@@ -635,15 +650,24 @@ const styles = {
   },
   explainImage: {
     width: "100%",
+    maxHeight: "250px",
+    objectFit: "contain",
     borderRadius: "8px",
     display: "block",
     marginBottom: "10px",
+  },
+  missingImageText: {
+    fontSize: "12px",
+    color: "#ef4444",
+    padding: "20px 0",
+    textAlign: "center",
   },
   explainDesc: {
     fontSize: "12px",
     color: "#475569",
     lineHeight: "1.5",
     margin: 0,
+    textAlign: "center",
   },
   errorCard: {
     padding: "14px",
