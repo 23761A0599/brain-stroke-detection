@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { predictImage } from "./services/api";
+import PasswordGate from "./PasswordGate";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "https://brain-hemorrhage-backend.onrender.com";
 
-function App() {
+function AppContent() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileName, setFileName] = useState("");
   const [preview, setPreview] = useState(null);
@@ -44,7 +45,12 @@ function App() {
 
     try {
       const data = await predictImage(selectedFile);
-      setResult(data);
+      if (data.error) {
+        setError(data.error);
+        setResult(null);
+      } else {
+        setResult(data);
+      }
     } catch (err) {
       setError(
         err.response?.data?.detail ||
@@ -706,5 +712,13 @@ const styles = {
     margin: "3px 0",
   },
 };
+
+function App() {
+  return (
+    <PasswordGate>
+      <AppContent />
+    </PasswordGate>
+  );
+}
 
 export default App;

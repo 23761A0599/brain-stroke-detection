@@ -66,10 +66,9 @@ transform = transforms.Compose([
 def file_to_data_url(path):
     if not path:
         return ""
-    
-    # Resolve relative path to absolute path if necessary
+
     full_path = path if os.path.isabs(path) else os.path.join(BASE_DIR, path)
-    
+
     if not os.path.exists(full_path):
         print(f"Warning: File not found for base64 conversion: {full_path}", flush=True)
         return ""
@@ -81,6 +80,26 @@ def file_to_data_url(path):
     except Exception as e:
         print(f"Failed to read file for base64 encoding ({full_path}): {e}", flush=True)
         return ""
+
+
+def looks_like_mri(pil_image, colorfulness_threshold=15):
+    """
+    Rejects obviously non-MRI uploads. Real MRI scans are essentially
+    grayscale, so a genuinely colorful image (a photo, screenshot, meme,
+    etc.) will fail this check. Not a perfect MRI detector - just a
+    sanity filter against clearly wrong file types.
+    """
+    np_img = np.array(pil_image).astype(np.float32)
+    if np_img.ndim != 3 or np_img.shape[2] < 3:
+        return True  # already grayscale - passes
+
+    r, g, b = np_img[..., 0], np_img[..., 1], np_img[..., 2]
+    rg = np.abs(r - g)
+    yb = np.abs(0.5 * (r + g) - b)
+    colorfulness = np.sqrt(rg.mean() ** 2 + yb.mean() ** 2) + \
+        0.3 * np.sqrt(rg.std() ** 2 + yb.std() ** 2)
+
+    return colorfulness < colorfulness_threshold
 
 
 @app.post("/predict")
@@ -98,6 +117,19 @@ async def predict(file: UploadFile = File(...)):
 
     image = Image.open(io.BytesIO(contents)).convert("RGB")
     print(f"Image Dimensions: {image.size} | Mode: {image.mode}", flush=True)
+
+    if not looks_like_mri(image):
+        print("Rejected upload: image failed MRI sanity check (too colorful).", flush=True)
+        return {
+            "prediction": "Invalid Image",
+            "confidence": "0.00%",
+            "hemorrhage_confidence": "0.00%",
+            "normal_confidence": "0.00%",
+            "gradcam": "",
+            "pro_gradcam": "",
+            "lime": "",
+            "error": "Please upload a valid grayscale MRI scan, not a regular photo or image."
+        }
 
     np_img = np.array(image)
 
