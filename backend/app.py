@@ -82,23 +82,33 @@ def file_to_data_url(path):
         return ""
 
 
-def looks_like_mri(pil_image, colorfulness_threshold=15,
+def looks_like_mri(pil_image,
+                    colorfulness_threshold=15,
                     border_brightness_threshold=120,
-                    overall_brightness_threshold=200):
+                    overall_brightness_threshold=200,
+                    min_fg_ratio=0.04,
+                    max_fg_ratio=0.85,
+                    min_circularity=0.35,
+                    border_touch_margin_frac=0.03):
     """
-    Rejects obviously non-MRI uploads using three checks:
-    1. Colorfulness - catches colorful photos/screenshots (MRIs are grayscale)
-    2. Dark background - catches bright documents/paper/photos (MRI scans
-       have solid black corners/edges; paper and most photos don't)
-    3. Overall brightness - catches bright documents/paper overall
-    Not a perfect MRI detector - just a sanity filter against clearly
-    wrong file types.
+    Three-stage sanity filter to reject non-MRI uploads:
+    1. Colorfulness   - rejects colorful photos, posters, product shots
+    2. Brightness      - rejects bright documents/photos (real MRI scans
+                          have a solid black background)
+    3. Blob shape       - real MRI scans show ONE roughly round/oval brain
+                          region, centered, surrounded by a black margin
+                          that never touches the image edges. Dark-mode
+                          screenshots of text/lists are dark and grayscale
+                          too, but don't have this shape - so this stage
+                          catches what the first two can't.
+    Not a perfect MRI detector - a practical filter against the realistic
+    wrong uploads people are likely to try.
     """
     np_img = np.array(pil_image).astype(np.float32)
-    gray = np.array(pil_image.convert("L")).astype(np.float32)
+    gray = np.array(pil_image.convert("L")).astype(np.uint8)
     h, w = gray.shape
 
-    # --- Check 1: colorfulness ---
+    # --- 1. Colorfulness ---
     if np_img.ndim == 3 and np_img.shape[2] >= 3:
         r, g, b = np_img[..., 0], np_img[..., 1], np_img[..., 2]
         rg = np.abs(r - g)
@@ -108,7 +118,7 @@ def looks_like_mri(pil_image, colorfulness_threshold=15,
         if colorfulness >= colorfulness_threshold:
             return False
 
-    # --- Check 2: dark background (MRI corners/edges are near-black) ---
+    # --- 2. Brightness (border + overall) ---
     border = max(int(max(h, w) * 0.04), 4)
     border_pixels = np.concatenate([
         gray[:border, :].flatten(),
@@ -118,9 +128,37 @@ def looks_like_mri(pil_image, colorfulness_threshold=15,
     ])
     if border_pixels.mean() > border_brightness_threshold:
         return False
-
-    # --- Check 3: overall brightness (documents/paper are mostly bright) ---
     if gray.mean() > overall_brightness_threshold:
+        return False
+
+    # --- 3. Blob shape: one centered, round-ish region on a black field ---
+    _, fg_mask = cv2.threshold(gray, 25, 255, cv2.THRESH_BINARY)
+    kernel = np.ones((5, 5), np.uint8)
+    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return False
+
+    largest = max(contours, key=cv2.contourArea)
+    area = cv2.contourArea(largest)
+    fg_ratio = area / (h * w)
+
+    if fg_ratio < min_fg_ratio or fg_ratio > max_fg_ratio:
+        return False
+
+    x, y, bw, bh = cv2.boundingRect(largest)
+    margin = max(int(min(h, w) * border_touch_margin_frac), 3)
+    touches_border = (x <= margin or y <= margin or
+                       (x + bw) >= (w - margin) or (y + bh) >= (h - margin))
+    if touches_border:
+        return False
+
+    (_, _), radius = cv2.minEnclosingCircle(largest)
+    circle_area = np.pi * (radius ** 2)
+    circularity = area / circle_area if circle_area > 0 else 0
+    if circularity < min_circularity:
         return False
 
     return True
