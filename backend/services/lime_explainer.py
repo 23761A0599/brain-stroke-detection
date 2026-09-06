@@ -79,8 +79,20 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
         cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) / (cam_resized.max() - cam_resized.min() + 1e-8))
         smooth_cam = cv2.GaussianBlur(cam_norm, (11, 11), 0)
 
-        thresh_val = np.percentile(smooth_cam, 92)
-        _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
+        # NEW: zero out a border margin before thresholding - same fix
+        # as gradcam_images.py, to prevent resize-interpolation edge
+        # artifacts (from EfficientNet's tiny 7x7 final feature map)
+        # from being picked as the "primary" region.
+        margin_h = max(1, int(h * 0.06))
+        margin_w = max(1, int(w * 0.06))
+        cam_for_threshold = smooth_cam.copy()
+        cam_for_threshold[:margin_h, :] = 0
+        cam_for_threshold[-margin_h:, :] = 0
+        cam_for_threshold[:, :margin_w] = 0
+        cam_for_threshold[:, -margin_w:] = 0
+
+        thresh_val = np.percentile(cam_for_threshold, 92)
+        _, binary = cv2.threshold(cam_for_threshold, thresh_val, 255, cv2.THRESH_BINARY)
         binary = binary.astype(np.uint8)
         binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
         binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
@@ -106,7 +118,12 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
             masked_cam = smooth_cam.copy()
             masked_cam[mask == 0] = 0
             y, x = np.unravel_index(np.argmax(masked_cam), masked_cam.shape)
-            peak = (int(x), int(y))
+
+            # NEW: clamp away from the very edge
+            safe_margin = 12
+            x = int(np.clip(x, safe_margin, w - safe_margin))
+            y = int(np.clip(y, safe_margin, h - safe_margin))
+            peak = (x, y)
 
         if peak is not None:
             result = draw_pointer_arrow(result, peak, accent=accent, label="Influential Feature")

@@ -40,8 +40,21 @@ def add_corner_badge(img, title, subtitle, accent=(0, 200, 255)):
     return img
 
 
-def isolate_primary_hemorrhage(cam_map, h, w, percentile=92):
-    """Normalize CAM map and retain ONLY the largest/strongest primary activation cluster."""
+def isolate_primary_hemorrhage(cam_map, h, w, percentile=92, border_margin_pct=0.06):
+    """
+    Normalize CAM map and retain ONLY the largest/strongest primary
+    activation cluster.
+
+    CHANGED: EfficientNet-B0's final feature map is only 7x7 - upscaling
+    that to 224x224 (32x) frequently produces spurious high-intensity
+    artifacts right at the image BORDERS/CORNERS from the interpolation
+    itself, not from any real activation. Without guarding against this,
+    the "largest contour" can end up being a border artifact instead of
+    the real lesion - which is exactly what caused the arrow to point
+    at the image edge/corner instead of the actual highlighted region.
+    Fix: zero out a border margin before thresholding, so edge artifacts
+    can never be selected as the primary region.
+    """
     if cam_map is None or np.max(cam_map) <= 0:
         return np.zeros((h, w), dtype=np.uint8), np.zeros((h, w), dtype=np.uint8), None, None
 
@@ -49,8 +62,18 @@ def isolate_primary_hemorrhage(cam_map, h, w, percentile=92):
     cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) / (cam_resized.max() - cam_resized.min() + 1e-8))
     smooth_cam = cv2.GaussianBlur(cam_norm, (11, 11), 0)
 
-    thresh_val = np.percentile(smooth_cam, percentile)
-    _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
+    # NEW: zero out a border margin to eliminate resize/interpolation
+    # edge artifacts before thresholding
+    margin_h = max(1, int(h * border_margin_pct))
+    margin_w = max(1, int(w * border_margin_pct))
+    cam_for_threshold = smooth_cam.copy()
+    cam_for_threshold[:margin_h, :] = 0
+    cam_for_threshold[-margin_h:, :] = 0
+    cam_for_threshold[:, :margin_w] = 0
+    cam_for_threshold[:, -margin_w:] = 0
+
+    thresh_val = np.percentile(cam_for_threshold, percentile)
+    _, binary = cv2.threshold(cam_for_threshold, thresh_val, 255, cv2.THRESH_BINARY)
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
 
@@ -66,7 +89,13 @@ def isolate_primary_hemorrhage(cam_map, h, w, percentile=92):
     masked_cam[clean_mask == 0] = 0
     y, x = np.unravel_index(np.argmax(masked_cam), masked_cam.shape)
 
-    return smooth_cam, clean_mask, primary_contour, (int(x), int(y))
+    # NEW: clamp the peak point away from the very edge, so the arrow
+    # marker is always fully visible inside the image bounds
+    safe_margin = 12
+    x = int(np.clip(x, safe_margin, w - safe_margin))
+    y = int(np.clip(y, safe_margin, h - safe_margin))
+
+    return smooth_cam, clean_mask, primary_contour, (x, y)
 
 
 def draw_pointer_arrow(img, peak, accent, label="Affected Region"):
