@@ -82,24 +82,48 @@ def file_to_data_url(path):
         return ""
 
 
-def looks_like_mri(pil_image, colorfulness_threshold=15):
+def looks_like_mri(pil_image, colorfulness_threshold=15,
+                    border_brightness_threshold=120,
+                    overall_brightness_threshold=200):
     """
-    Rejects obviously non-MRI uploads. Real MRI scans are essentially
-    grayscale, so a genuinely colorful image (a photo, screenshot, meme,
-    etc.) will fail this check. Not a perfect MRI detector - just a
-    sanity filter against clearly wrong file types.
+    Rejects obviously non-MRI uploads using three checks:
+    1. Colorfulness - catches colorful photos/screenshots (MRIs are grayscale)
+    2. Dark background - catches bright documents/paper/photos (MRI scans
+       have solid black corners/edges; paper and most photos don't)
+    3. Overall brightness - catches bright documents/paper overall
+    Not a perfect MRI detector - just a sanity filter against clearly
+    wrong file types.
     """
     np_img = np.array(pil_image).astype(np.float32)
-    if np_img.ndim != 3 or np_img.shape[2] < 3:
-        return True  # already grayscale - passes
+    gray = np.array(pil_image.convert("L")).astype(np.float32)
+    h, w = gray.shape
 
-    r, g, b = np_img[..., 0], np_img[..., 1], np_img[..., 2]
-    rg = np.abs(r - g)
-    yb = np.abs(0.5 * (r + g) - b)
-    colorfulness = np.sqrt(rg.mean() ** 2 + yb.mean() ** 2) + \
-        0.3 * np.sqrt(rg.std() ** 2 + yb.std() ** 2)
+    # --- Check 1: colorfulness ---
+    if np_img.ndim == 3 and np_img.shape[2] >= 3:
+        r, g, b = np_img[..., 0], np_img[..., 1], np_img[..., 2]
+        rg = np.abs(r - g)
+        yb = np.abs(0.5 * (r + g) - b)
+        colorfulness = np.sqrt(rg.mean() ** 2 + yb.mean() ** 2) + \
+            0.3 * np.sqrt(rg.std() ** 2 + yb.std() ** 2)
+        if colorfulness >= colorfulness_threshold:
+            return False
 
-    return colorfulness < colorfulness_threshold
+    # --- Check 2: dark background (MRI corners/edges are near-black) ---
+    border = max(int(max(h, w) * 0.04), 4)
+    border_pixels = np.concatenate([
+        gray[:border, :].flatten(),
+        gray[-border:, :].flatten(),
+        gray[:, :border].flatten(),
+        gray[:, -border:].flatten(),
+    ])
+    if border_pixels.mean() > border_brightness_threshold:
+        return False
+
+    # --- Check 3: overall brightness (documents/paper are mostly bright) ---
+    if gray.mean() > overall_brightness_threshold:
+        return False
+
+    return True
 
 
 @app.post("/predict")
@@ -119,7 +143,7 @@ async def predict(file: UploadFile = File(...)):
     print(f"Image Dimensions: {image.size} | Mode: {image.mode}", flush=True)
 
     if not looks_like_mri(image):
-        print("Rejected upload: image failed MRI sanity check (too colorful).", flush=True)
+        print("Rejected upload: image failed MRI sanity check.", flush=True)
         return {
             "prediction": "Invalid Image",
             "confidence": "0.00%",
@@ -128,7 +152,7 @@ async def predict(file: UploadFile = File(...)):
             "gradcam": "",
             "pro_gradcam": "",
             "lime": "",
-            "error": "Please upload a valid grayscale MRI scan, not a regular photo or image."
+            "error": "Please upload a valid grayscale MRI scan, not a regular photo, document, or image."
         }
 
     np_img = np.array(image)
