@@ -10,31 +10,47 @@ LIME_DIR = Path("outputs") / "lime"
 LIME_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def add_label_banner(img, title, subtitle, accent=(0, 230, 255)):
+def add_corner_badge(img, title, subtitle, accent=(230, 0, 255)):
+    """Same top-corner badge treatment as gradcam_images.py, so all
+    three visualizations share a consistent, non-obscuring label style."""
     h, w = img.shape[:2]
-    banner_h = max(46, int(h * 0.20))
+    pad = 8
+    line1_scale, line2_scale = 0.48, 0.42
+
+    (t_w, t_h), _ = cv2.getTextSize(title, cv2.FONT_HERSHEY_SIMPLEX, line1_scale, 1)
+    (s_w, s_h), _ = cv2.getTextSize(subtitle, cv2.FONT_HERSHEY_SIMPLEX, line2_scale, 1)
+    badge_w = min(max(t_w, s_w) + pad * 2, w - 10)
+    badge_h = t_h + s_h + pad * 3
+
     overlay = img.copy()
-    cv2.rectangle(overlay, (0, h - banner_h), (w, h), (20, 20, 20), -1)
-    img = cv2.addWeighted(overlay, 0.82, img, 0.18, 0)
-    cv2.rectangle(img, (0, h - banner_h), (5, h), accent, -1)
+    cv2.rectangle(overlay, (5, 5), (5 + badge_w, 5 + badge_h), (15, 15, 15), -1)
+    img = cv2.addWeighted(overlay, 0.80, img, 0.20, 0)
+    cv2.rectangle(img, (5, 5), (8, 5 + badge_h), accent, -1)
 
-    def fit_scale(text, max_width, start):
-        scale = start
-        while scale > 0.25:
-            size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)
-            if size[0] <= max_width:
-                return scale
-            scale -= 0.03
-        return scale
+    cv2.putText(img, title, (5 + pad, 5 + pad + t_h),
+                cv2.FONT_HERSHEY_SIMPLEX, line1_scale, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(img, subtitle, (5 + pad, 5 + pad * 2 + t_h + s_h),
+                cv2.FONT_HERSHEY_SIMPLEX, line2_scale, accent, 1, cv2.LINE_AA)
+    return img
 
-    max_w = w - 20
-    title_scale = fit_scale(title, max_w, 0.5)
-    sub_scale = fit_scale(subtitle, max_w, 0.42)
 
-    cv2.putText(img, title, (12, h - banner_h + int(banner_h * 0.45)),
-                cv2.FONT_HERSHEY_SIMPLEX, title_scale, (255, 255, 255), 1, cv2.LINE_AA)
-    cv2.putText(img, subtitle, (12, h - int(banner_h * 0.15)),
-                cv2.FONT_HERSHEY_SIMPLEX, sub_scale, accent, 1, cv2.LINE_AA)
+def draw_pointer_arrow(img, peak, accent, label="Key Feature"):
+    """Same pointer-arrow treatment as gradcam_images.py, for visual
+    consistency across all three explainability outputs."""
+    h, w = img.shape[:2]
+    cx, cy = peak
+
+    corners = [(20, h - 20), (w - 20, h - 20), (20, 20), (w - 20, 20)]
+    tail = max(corners, key=lambda c: (c[0] - cx) ** 2 + (c[1] - cy) ** 2)
+
+    cv2.arrowedLine(img, tail, (cx, cy), accent, 2, cv2.LINE_AA, tipLength=0.08)
+    cv2.circle(img, (cx, cy), 5, accent, -1, cv2.LINE_AA)
+    cv2.circle(img, (cx, cy), 8, accent, 2, cv2.LINE_AA)
+
+    text_x = min(max(tail[0] - 40, 5), w - 130)
+    text_y = tail[1] - 8 if tail[1] > h // 2 else tail[1] + 18
+    cv2.putText(img, label, (text_x, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.42, accent, 1, cv2.LINE_AA)
     return img
 
 
@@ -50,6 +66,11 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
 
     is_hemorrhage = "hemorrhag" in class_name.lower()
     label_text = f"{class_name}  |  {confidence_score * 100:.1f}% confidence"
+
+    # CHANGED: distinct visual identity - purple/magenta "spotlight"
+    # style (vs. Grad-CAM's warm inferno glow and Grad-CAM++'s gold
+    # tactical brackets), so all three are clearly different at a glance.
+    accent = (230, 0, 255)  # magenta (BGR)
     result = gray_bgr.copy()
 
     if is_hemorrhage and cam_map is not None:
@@ -58,7 +79,6 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
         cam_norm = np.uint8(255 * (cam_resized - cam_resized.min()) / (cam_resized.max() - cam_resized.min() + 1e-8))
         smooth_cam = cv2.GaussianBlur(cam_norm, (11, 11), 0)
 
-        # Threshold to get top region
         thresh_val = np.percentile(smooth_cam, 92)
         _, binary = cv2.threshold(smooth_cam, thresh_val, 255, cv2.THRESH_BINARY)
         binary = binary.astype(np.uint8)
@@ -66,28 +86,34 @@ def save_lime_explanation(image_path, cam_map, confidence_score, class_name):
         binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))
 
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        peak = None
 
         if contours:
-            # Select ONLY the largest primary contour
             primary_contour = max(contours, key=cv2.contourArea)
             hull = cv2.convexHull(primary_contour)
 
             mask = np.zeros_like(gray)
             cv2.drawContours(mask, [hull], -1, 255, -1)
 
-            # Red Tinted Polygon Overlay
-            red_overlay = np.zeros_like(result)
-            red_overlay[:] = (30, 30, 220)  # BGR Red
+            feather = cv2.GaussianBlur(mask, (25, 25), 0)
+            glow = np.zeros_like(result)
+            glow[:] = (200, 0, 220)
+            alpha = (feather.astype(np.float32) / 255.0)[..., None] * 0.5
+            result = (result.astype(np.float32) * (1 - alpha) + glow.astype(np.float32) * alpha).astype(np.uint8)
 
-            alpha = (mask.astype(np.float32) / 255.0)[..., None] * 0.45
-            result = (result.astype(np.float32) * (1 - alpha) + red_overlay.astype(np.float32) * alpha).astype(np.uint8)
+            cv2.drawContours(result, [hull], -1, accent, 2, cv2.LINE_AA)
 
-            # High-Contrast Cyan Border Line
-            cv2.drawContours(result, [hull], -1, (255, 230, 0), 2, cv2.LINE_AA)
+            masked_cam = smooth_cam.copy()
+            masked_cam[mask == 0] = 0
+            y, x = np.unravel_index(np.argmax(masked_cam), masked_cam.shape)
+            peak = (int(x), int(y))
 
-        result = add_label_banner(result, "LIME Segment", label_text, accent=(255, 200, 0))
+        if peak is not None:
+            result = draw_pointer_arrow(result, peak, accent=accent, label="Influential Feature")
+
+        result = add_corner_badge(result, "LIME Segment", label_text, accent=accent)
     else:
-        result = add_label_banner(result, "LIME Segment", label_text, accent=(60, 220, 90))
+        result = add_corner_badge(result, "LIME Segment", label_text, accent=(60, 220, 90))
 
     filename = f"lime_{timestamp}.png"
     output_path = LIME_DIR / filename

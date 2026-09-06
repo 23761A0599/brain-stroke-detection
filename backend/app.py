@@ -81,31 +81,39 @@ def file_to_data_url(path):
         print(f"Failed to read file for base64 encoding ({full_path}): {e}", flush=True)
         return ""
 
-
 def looks_like_mri(pil_image,
                     colorfulness_threshold=15,
                     overall_brightness_threshold=195,
                     min_midtone_ratio=0.15,
                     midtone_low=15,
-                    midtone_high=235):
+                    midtone_high=235,
+                    max_aspect_ratio=1.25):
     """
-    Two-stage sanity filter to reject non-MRI uploads:
-    1. Colorfulness - rejects colorful photos, posters, product shots,
-       jerseys, statues, etc. (MRI scans are essentially grayscale)
-    2. Midtone spread - real MRI/scan images have a continuous range of
-       gray tones (dark background, mid-gray tissue, bright highlights).
-       Flat digital content (dark-mode screenshots, text lists, documents)
-       is mostly just two tones - background + text - with very little
-       in between. This catches what a simple brightness check can't,
-       without relying on brain "shape" (which varies too much between
-       real scans to filter on reliably).
-    Not a perfect MRI detector - a practical filter against the realistic
-    wrong uploads people are likely to try.
+    Sanity filter to reject non-MRI uploads:
+    1. Colorfulness  - rejects colorful photos, posters, product shots
+    2. Brightness     - rejects bright documents/photos
+    3. Midtone spread - rejects flat two-tone UI screenshots/text
+    4. Aspect ratio   - real MRI scan exports are roughly SQUARE
+                        (e.g. 256x256). Phone photos of documents,
+                        notebooks, posters, and screenshots are almost
+                        always tall rectangles, since that's how phone
+                        cameras and screens are shaped. This is the
+                        single strongest signal for the cases seen so
+                        far and catches what texture/color checks miss.
+    Not a perfect MRI detector - a practical filter against the
+    realistic wrong uploads people are likely to try. If you later
+    get genuine non-square MRI exports, raise max_aspect_ratio.
     """
     np_img = np.array(pil_image).astype(np.float32)
     gray = np.array(pil_image.convert("L")).astype(np.float32)
+    h, w = gray.shape
 
-    # --- 1. Colorfulness ---
+    # --- 1. Aspect ratio (checked first - cheapest, strongest signal) ---
+    aspect_ratio = max(h, w) / min(h, w)
+    if aspect_ratio > max_aspect_ratio:
+        return False
+
+    # --- 2. Colorfulness ---
     if np_img.ndim == 3 and np_img.shape[2] >= 3:
         r, g, b = np_img[..., 0], np_img[..., 1], np_img[..., 2]
         rg = np.abs(r - g)
@@ -115,11 +123,11 @@ def looks_like_mri(pil_image,
         if colorfulness >= colorfulness_threshold:
             return False
 
-    # --- 2. Overall brightness (rejects bright documents/paper/photos) ---
+    # --- 3. Overall brightness ---
     if gray.mean() > overall_brightness_threshold:
         return False
 
-    # --- 3. Midtone spread (rejects flat two-tone UI screenshots/text) ---
+    # --- 4. Midtone spread ---
     midtone_ratio = np.mean((gray >= midtone_low) & (gray <= midtone_high))
     if midtone_ratio < min_midtone_ratio:
         return False
