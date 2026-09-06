@@ -84,29 +84,26 @@ def file_to_data_url(path):
 
 def looks_like_mri(pil_image,
                     colorfulness_threshold=15,
-                    border_brightness_threshold=120,
-                    overall_brightness_threshold=200,
-                    min_fg_ratio=0.04,
-                    max_fg_ratio=0.85,
-                    min_circularity=0.35,
-                    border_touch_margin_frac=0.03):
+                    overall_brightness_threshold=195,
+                    min_midtone_ratio=0.15,
+                    midtone_low=15,
+                    midtone_high=235):
     """
-    Three-stage sanity filter to reject non-MRI uploads:
-    1. Colorfulness   - rejects colorful photos, posters, product shots
-    2. Brightness      - rejects bright documents/photos (real MRI scans
-                          have a solid black background)
-    3. Blob shape       - real MRI scans show ONE roughly round/oval brain
-                          region, centered, surrounded by a black margin
-                          that never touches the image edges. Dark-mode
-                          screenshots of text/lists are dark and grayscale
-                          too, but don't have this shape - so this stage
-                          catches what the first two can't.
+    Two-stage sanity filter to reject non-MRI uploads:
+    1. Colorfulness - rejects colorful photos, posters, product shots,
+       jerseys, statues, etc. (MRI scans are essentially grayscale)
+    2. Midtone spread - real MRI/scan images have a continuous range of
+       gray tones (dark background, mid-gray tissue, bright highlights).
+       Flat digital content (dark-mode screenshots, text lists, documents)
+       is mostly just two tones - background + text - with very little
+       in between. This catches what a simple brightness check can't,
+       without relying on brain "shape" (which varies too much between
+       real scans to filter on reliably).
     Not a perfect MRI detector - a practical filter against the realistic
     wrong uploads people are likely to try.
     """
     np_img = np.array(pil_image).astype(np.float32)
-    gray = np.array(pil_image.convert("L")).astype(np.uint8)
-    h, w = gray.shape
+    gray = np.array(pil_image.convert("L")).astype(np.float32)
 
     # --- 1. Colorfulness ---
     if np_img.ndim == 3 and np_img.shape[2] >= 3:
@@ -118,47 +115,13 @@ def looks_like_mri(pil_image,
         if colorfulness >= colorfulness_threshold:
             return False
 
-    # --- 2. Brightness (border + overall) ---
-    border = max(int(max(h, w) * 0.04), 4)
-    border_pixels = np.concatenate([
-        gray[:border, :].flatten(),
-        gray[-border:, :].flatten(),
-        gray[:, :border].flatten(),
-        gray[:, -border:].flatten(),
-    ])
-    if border_pixels.mean() > border_brightness_threshold:
-        return False
+    # --- 2. Overall brightness (rejects bright documents/paper/photos) ---
     if gray.mean() > overall_brightness_threshold:
         return False
 
-    # --- 3. Blob shape: one centered, round-ish region on a black field ---
-    _, fg_mask = cv2.threshold(gray, 25, 255, cv2.THRESH_BINARY)
-    kernel = np.ones((5, 5), np.uint8)
-    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
-
-    contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return False
-
-    largest = max(contours, key=cv2.contourArea)
-    area = cv2.contourArea(largest)
-    fg_ratio = area / (h * w)
-
-    if fg_ratio < min_fg_ratio or fg_ratio > max_fg_ratio:
-        return False
-
-    x, y, bw, bh = cv2.boundingRect(largest)
-    margin = max(int(min(h, w) * border_touch_margin_frac), 3)
-    touches_border = (x <= margin or y <= margin or
-                       (x + bw) >= (w - margin) or (y + bh) >= (h - margin))
-    if touches_border:
-        return False
-
-    (_, _), radius = cv2.minEnclosingCircle(largest)
-    circle_area = np.pi * (radius ** 2)
-    circularity = area / circle_area if circle_area > 0 else 0
-    if circularity < min_circularity:
+    # --- 3. Midtone spread (rejects flat two-tone UI screenshots/text) ---
+    midtone_ratio = np.mean((gray >= midtone_low) & (gray <= midtone_high))
+    if midtone_ratio < min_midtone_ratio:
         return False
 
     return True
