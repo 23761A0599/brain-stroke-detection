@@ -1,87 +1,84 @@
+"""
+Corrected /predict route (replaces the old route file that calls gradcam_pro.generate_gradcam_images).
+
+What was wrong with the old route
+  * is_hemorrhagic = "hemorrhag" in label.lower() or idx == 1  ->  "nonhemorrhagic" contains "hemorrhag",
+    so EVERY prediction was reported as hemorrhagic and received a "Suspected Hemorrhage" overlay.
+  * it imported `transform` from services.gradcam, which that file does not define.
+  * it read img_paths["lime"], which generate_gradcam_images() never returns (KeyError -> HTTP 500).
+  * the "LIME" overlay was a re-coloured Grad-CAM contour, not LIME.
+
+This version uses services/explainers.py (genuine Grad-CAM, Grad-CAM++ and LIME) and decides the class ONLY
+from the class index. Explanations are returned for the predicted class; boxes are drawn only for a
+hemorrhagic prediction. The response keeps the keys the React front end already uses.
+"""
 import base64
+
 import cv2
 import numpy as np
 import torch
-from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from PIL import Image
 
 from model.config import CLASS_NAMES, DEVICE, IMAGE_SIZE
-from services.gradcam import generate_gradcam_map, transform
-from services.gradcam_pro import generate_gradcam_images
-from services.lime_explainer import save_lime_explanation
-from services.predictor import model  # Imports the loaded PyTorch model instance
+from services import explainers as E
+from services.predictor import model          # loaded EfficientNet-B0 (eval mode)
 
 router = APIRouter()
+HEM_IDX = CLASS_NAMES.index("Hemorrhagic")
+_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
 
-def encode_image_to_base64(file_path: str) -> str:
-    """Helper function to convert output image files to base64 strings for React rendering."""
-    with open(file_path, "rb") as image_file:
-        encoded = base64.b64encode(image_file.read()).decode("utf-8")
-        return f"data:image/png;base64,{encoded}"
+def _to_tensor(img_rgb: np.ndarray) -> torch.Tensor:
+    t = torch.from_numpy(img_rgb).permute(2, 0, 1).float() / 255.0
+    return ((t - _MEAN) / _STD).unsqueeze(0).to(DEVICE)
+
+
+def _data_uri(img_rgb: np.ndarray) -> str:
+    ok, buf = cv2.imencode(".png", cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR))
+    if not ok:
+        raise RuntimeError("PNG encoding failed")
+    return "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode("utf-8")
 
 
 @router.post("/predict")
-async def predict(file: UploadFile = File(...)):
+def predict(file: UploadFile = File(...), lime_samples: int = 500):
+    # plain `def`: FastAPI runs it in a worker thread, so the heavy LIME step does not block the event loop
     try:
-        # 1. Read input image bytes
-        contents = await file.read()
-        nparr = np.frombuffer(contents, np.uint8)
-
-        # Decode as a 3-channel BGR image directly using OpenCV to preserve colors
-        orig_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if orig_bgr is None:
+        data = np.frombuffer(file.file.read(), np.uint8)
+        bgr = cv2.imdecode(data, cv2.IMREAD_COLOR)
+        if bgr is None:
             raise HTTPException(status_code=400, detail="Invalid image file format.")
+        rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        img = np.array(Image.fromarray(rgb).resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR))
+        x = _to_tensor(img)
 
-        # 2. Convert to PIL Image and apply transformations for model input
-        pil_img = Image.fromarray(cv2.cvtColor(orig_bgr, cv2.COLOR_BGR2RGB))
-        image_tensor = transform(pil_img).unsqueeze(0).to(DEVICE)
+        cam_g, pred, probs = E.compute_cam(model, x, "gradcam")
+        cam_pp, _, _ = E.compute_cam(model, x, "gradcam++")
+        lime = E.lime_image(E.make_predict_fn(model, DEVICE), img, pred, n_samples=max(100, min(lime_samples, 1500)))
 
-        # 3. Compute Grad-CAM activation map from model
-        cam_map, pred_class_idx = generate_gradcam_map(model, image_tensor)
+        over_g = E.overlay_heatmap(img, cam_g)
+        over_pp = E.overlay_heatmap(img, cam_pp)
+        if pred == HEM_IDX:                                  # region boxes only for a hemorrhage prediction
+            over_pp, _ = E.draw_regions(over_pp, cam_pp, thr=0.5)
+        over_lime = E.overlay_lime(img, lime["segments"], lime["coef"], top_k=5)
 
-        # 4. Correct Probability Score Calculation (Binary vs Multi-Class)
-        with torch.no_grad():
-            outputs = model(image_tensor)
-            if outputs.shape[1] == 1:
-                # Binary output node (Sigmoid activation)
-                prob = torch.sigmoid(outputs).item()
-                pred_class_idx = 1 if prob >= 0.5 else 0
-                confidence = prob if pred_class_idx == 1 else (1.0 - prob)
-            else:
-                # Multi-class output nodes (Softmax activation)
-                probs = torch.softmax(outputs, dim=1)[0]
-                pred_class_idx = torch.argmax(probs).item()
-                confidence = probs[pred_class_idx].item()
-
-        predicted_label = CLASS_NAMES[pred_class_idx]
-        is_hemorrhagic = "hemorrhag" in predicted_label.lower() or pred_class_idx == 1
-
-        # 5. Generate visual overlays if classification is Hemorrhagic
-        if is_hemorrhagic:
-            img_paths = generate_gradcam_images(
-                orig_bgr=orig_bgr,
-                cam_map=cam_map,
-                confidence_score=confidence,
-                class_name=predicted_label
-            )
-
-            # Convert generated images to base64 response format
-            gradcam_b64 = encode_image_to_base64(img_paths["gradcam"])
-            gradcam_pro_b64 = encode_image_to_base64(img_paths["gradcam_pro"])
-            lime_b64 = encode_image_to_base64(img_paths["lime"])
-        else:
-            gradcam_b64, gradcam_pro_b64, lime_b64 = None, None, None
-
+        confidence = float(probs[pred])
         return {
-            "prediction": predicted_label,
+            "prediction": CLASS_NAMES[pred],
             "confidence": confidence,
             "confidence_percentage": f"{confidence * 100:.2f}%",
-            "is_hemorrhagic": is_hemorrhagic,
-            "gradcam": gradcam_b64,
-            "gradcam_pro": gradcam_pro_b64,
-            "lime": lime_b64
+            "is_hemorrhagic": bool(pred == HEM_IDX),
+            "probabilities": {c: float(p) for c, p in zip(CLASS_NAMES, probs)},
+            "explained_class": CLASS_NAMES[pred],
+            "gradcam": _data_uri(over_g),
+            "gradcam_pro": _data_uri(over_pp),               # Grad-CAM++ (true second/third-order weights)
+            "lime": _data_uri(over_lime),
+            "lime_r2": round(float(lime["r2"]), 3),          # local fidelity of the LIME surrogate
+            "notice": "Research prototype - not a medical device. Explanations show what the model used, not clinical findings.",
         }
-
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

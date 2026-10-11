@@ -1,0 +1,9 @@
+figure,true_class,pred_class,confidence_pct,lime_r2,gradcam_bg_fraction,gradcampp_bg_fraction,source_file
+Hemorrhagic_1.png,Hemorrhagic,Hemorrhagic,90.7,0.808,0.323,0.078,Kuppusamy SWI-25.jpg_Haemorrhagic_20.png
+Hemorrhagic_2.png,Hemorrhagic,Hemorrhagic,74.2,0.683,0.535,0.1,Kuppusamy DWI-7.jpg_Haemorrhagic_4.png
+Hemorrhagic_3.png,Hemorrhagic,Hemorrhagic,71.9,0.705,0.269,0.054,Prabhakar Rao GRE-4.jpg_Haemorrhagic_183.png
+Hemorrhagic_4.png,Hemorrhagic,Hemorrhagic,93.7,0.445,0.26,0.063,Prabhakar Rao DWI-6.jpg_Haemorrhagic_152.png
+NonHemorrhagic_1.png,NonHemorrhagic,NonHemorrhagic,71.1,0.541,0.006,0.002,Chitra GRE-17.jpg_Normal_116.png
+NonHemorrhagic_2.png,NonHemorrhagic,Hemorrhagic,69.6,0.764,0.456,0.056,Bushan Yadav SWI-33.jpg_Normal_273.png
+NonHemorrhagic_3.png,NonHemorrhagic,NonHemorrhagic,63.2,0.625,0.057,0.068,Bushan Yadav SWI-10.jpg_Normal_296.png
+NonHemorrhagic_4.png,NonHemorrhagic,NonHemorrhagic,94.8,0.437,0.076,0.058,Salini DWI-5.jpg_Normal_51.png
