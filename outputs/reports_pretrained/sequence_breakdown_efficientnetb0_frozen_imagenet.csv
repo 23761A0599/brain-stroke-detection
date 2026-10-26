@@ -1,0 +1,10 @@
+﻿sequence,class,n,accuracy_pct
+DWI,ALL,110,88.2
+DWI,Hemorrhagic,23,60.9
+DWI,NonHemorrhagic,87,95.4
+GRE,ALL,97,79.4
+GRE,Hemorrhagic,25,64.0
+GRE,NonHemorrhagic,72,84.7
+SWI,ALL,50,64.0
+SWI,Hemorrhagic,21,90.5
+SWI,NonHemorrhagic,29,44.8

@@ -1,0 +1,258 @@
+fold,patient_id,class,filename,label,pred,p_hem
+0,Venda,Hemorrhagic,Venda DWI-14.jpg_Haemorrhagic_65.png,0,1,0.23206740617752075
+0,Venda,Hemorrhagic,Venda DWI-15.jpg_Haemorrhagic_66.png,0,1,0.45154520869255066
+0,Venda,Hemorrhagic,Venda DWI-16.jpg_Haemorrhagic_67.png,0,1,0.37865516543388367
+0,Venda,Hemorrhagic,Venda GRE-10.jpg_Haemorrhagic_60.png,0,1,0.39007067680358887
+0,Venda,Hemorrhagic,Venda GRE-11.jpg_Haemorrhagic_61.png,0,1,0.44337785243988037
+0,Venda,Hemorrhagic,Venda GRE-12.jpg_Haemorrhagic_62.png,0,1,0.23705890774726868
+0,Venda,Hemorrhagic,Venda GRE-13.jpg_Haemorrhagic_63.png,0,0,0.651840329170227
+0,Venda,Hemorrhagic,Venda GRE-14.jpg_Haemorrhagic_64.png,0,1,0.24231867492198944
+0,Venda,Hemorrhagic,Venda GRE-9.jpg_Haemorrhagic_59.png,0,1,0.2772383987903595
+0,Venda,Hemorrhagic,Venda SWI-27.jpg_Haemorrhagic_72.png,0,0,0.6145094037055969
+0,Venda,Hemorrhagic,Venda SWI-28.jpg_Haemorrhagic_73.png,0,0,0.6537023782730103
+0,Venda,Hemorrhagic,Venda SWI-29.jpg_Haemorrhagic_74.png,0,0,0.5358291268348694
+0,Venda,Hemorrhagic,Venda SWI-30.jpg_Haemorrhagic_75.png,0,0,0.6740483045578003
+0,Venda,Hemorrhagic,Venda SWI-40.jpg_Haemorrhagic_85.png,0,0,0.8715643286705017
+0,Venda,Hemorrhagic,Venda SWI-41.jpg_Haemorrhagic_86.png,0,0,0.9248335957527161
+0,Venda,Hemorrhagic,Venda SWI-43.jpg_Haemorrhagic_88.png,0,0,0.8491594195365906
+0,Venda,Hemorrhagic,Venda SWI-45.jpg_Haemorrhagic_90.png,0,0,0.6177695989608765
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-10.jpg_Normal_211.png,1,1,0.3214512765407562
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-11.jpg_Normal_209.png,1,1,0.09634099900722504
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-12.jpg_Normal_208.png,1,1,0.10549913346767426
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-13.jpg_Normal_207.png,1,1,0.07489433884620667
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-14.jpg_Normal_206.png,1,1,0.19100695848464966
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-15.jpg_Normal_205.png,1,1,0.24018165469169617
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-16.jpg_Normal_204.png,1,1,0.10048840194940567
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-18.jpg_Normal_202.png,1,1,0.16328449547290802
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-19.jpg_Normal_201.png,1,1,0.12797848880290985
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-5.jpg_Normal_215.png,1,0,0.5806688666343689
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-6.jpg_Normal_214.png,1,0,0.6812761425971985
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-8.jpg_Normal_212.png,1,0,0.72308748960495
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav DWI-9.jpg_Normal_210.png,1,1,0.2171236276626587
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-10.jpg_Normal_223.png,1,1,0.16313272714614868
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-11.jpg_Normal_224.png,1,1,0.3308614492416382
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-12.jpg_Normal_225.png,1,0,0.5514275431632996
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-13.jpg_Normal_226.png,1,0,0.6542264223098755
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-14.jpg_Normal_227.png,1,1,0.41642555594444275
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-15.jpg_Normal_228.png,1,1,0.4991057813167572
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-16.jpg_Normal_229.png,1,0,0.5084918737411499
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-3.jpg_Normal_216.png,1,0,0.8099679350852966
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-4.jpg_Normal_217.png,1,1,0.16905921697616577
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-6.jpg_Normal_219.png,1,1,0.3140609562397003
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-7.jpg_Normal_221.png,1,1,0.43059176206588745
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-8.jpg_Normal_220.png,1,1,0.08103861659765244
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav GRE-9.jpg_Normal_222.png,1,1,0.04440293833613396
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-10.jpg_Normal_296.png,1,1,0.49058666825294495
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-16.jpg_Normal_290.png,1,1,0.26051923632621765
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-17.jpg_Normal_289.png,1,1,0.11950358003377914
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-18.jpg_Normal_288.png,1,1,0.3665417730808258
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-19.jpg_Normal_287.png,1,1,0.2969079911708832
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-20.jpg_Normal_286.png,1,1,0.32081660628318787
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-21.jpg_Normal_285.png,1,1,0.2398339956998825
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-30.jpg_Normal_276.png,1,0,0.5486024618148804
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-31.jpg_Normal_275.png,1,0,0.6916573643684387
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-33.jpg_Normal_273.png,1,0,0.7595746517181396
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-34(1).jpg_Normal_270.png,1,0,0.6513957381248474
+0,Bushan Yadav,NonHemorrhagic,Bushan Yadav SWI-37(1).jpg_Normal_261.png,1,0,0.5548832416534424
+0,Salini,NonHemorrhagic,Salini DWI-10.jpg_Normal_56.png,1,1,0.11569862812757492
+0,Salini,NonHemorrhagic,Salini DWI-11.jpg_Normal_57.png,1,1,0.11070150136947632
+0,Salini,NonHemorrhagic,Salini DWI-12.jpg_Normal_58.png,1,1,0.018750926479697227
+0,Salini,NonHemorrhagic,Salini DWI-13.jpg_Normal_59.png,1,1,0.1664055734872818
+0,Salini,NonHemorrhagic,Salini DWI-15.jpg_Normal_61.png,1,1,0.12917672097682953
+0,Salini,NonHemorrhagic,Salini DWI-16.jpg_Normal_62.png,1,1,0.09471958130598068
+0,Salini,NonHemorrhagic,Salini DWI-19.jpg_Normal_65.png,1,0,0.5054487586021423
+0,Salini,NonHemorrhagic,Salini DWI-20.jpg_Normal_66.png,1,1,0.32426923513412476
+0,Salini,NonHemorrhagic,Salini DWI-21.jpg_Normal_67.png,1,1,0.3791705071926117
+0,Salini,NonHemorrhagic,Salini DWI-22.jpg_Normal_68.png,1,1,0.10105543583631516
+0,Salini,NonHemorrhagic,Salini DWI-4.jpg_Normal_50.png,1,0,0.5018935799598694
+0,Salini,NonHemorrhagic,Salini DWI-5.jpg_Normal_51.png,1,1,0.11931907385587692
+0,Salini,NonHemorrhagic,Salini DWI-6.jpg_Normal_52.png,1,1,0.12910528481006622
+0,Salini,NonHemorrhagic,Salini DWI-7.jpg_Normal_53.png,1,1,0.275959312915802
+0,Salini,NonHemorrhagic,Salini DWI-8.jpg_Normal_54.png,1,1,0.4652163088321686
+0,Salini,NonHemorrhagic,Salini DWI-9.jpg_Normal_55.png,1,1,0.37099894881248474
+0,Salini,NonHemorrhagic,Salini GRE-10.jpg_Normal_40.png,1,1,0.09353283792734146
+0,Salini,NonHemorrhagic,Salini GRE-11.jpg_Normal_41.png,1,1,0.26187971234321594
+0,Salini,NonHemorrhagic,Salini GRE-12.jpg_Normal_42.png,1,0,0.5333395600318909
+0,Salini,NonHemorrhagic,Salini GRE-13.jpg_Normal_43.png,1,0,0.8725829124450684
+0,Salini,NonHemorrhagic,Salini GRE-16.jpg_Normal_46.png,1,0,0.5192411541938782
+0,Salini,NonHemorrhagic,Salini GRE-17.jpg_Normal_47.png,1,1,0.45692166686058044
+0,Salini,NonHemorrhagic,Salini GRE-18.jpg_Normal_48.png,1,1,0.48266467452049255
+0,Salini,NonHemorrhagic,Salini GRE-19.jpg_Normal_49.png,1,1,0.31119999289512634
+0,Salini,NonHemorrhagic,Salini GRE-4.jpg_Normal_34.png,1,0,0.6228678822517395
+0,Salini,NonHemorrhagic,Salini GRE-9.jpg_Normal_39.png,1,1,0.36189645528793335
+1,Shamshath,Hemorrhagic,Shamshath DWI-10.jpg_Haemorrhagic_37.png,0,1,0.2072412371635437
+1,Shamshath,Hemorrhagic,Shamshath DWI-11.jpg_Haemorrhagic_38.png,0,1,0.07565739005804062
+1,Shamshath,Hemorrhagic,Shamshath DWI-7.jpg_Haemorrhagic_34.png,0,0,0.5843504667282104
+1,Shamshath,Hemorrhagic,Shamshath DWI-9.jpg_Haemorrhagic_36.png,0,0,0.723415732383728
+1,Shamshath,Hemorrhagic,Shamshath GRE-5.jpg_Haemorrhagic_30.png,0,0,0.5726198554039001
+1,Shamshath,Hemorrhagic,Shamshath GRE-6.jpg_Haemorrhagic_31.png,0,0,0.6904314160346985
+1,Shamshath,Hemorrhagic,Shamshath GRE-7.jpg_Haemorrhagic_32.png,0,0,0.7464722394943237
+1,Shamshath,Hemorrhagic,Shamshath GRE-8.jpg_Haemorrhagic_33.png,0,1,0.4980830252170563
+1,Shamshath,Hemorrhagic,Shamshath SWI-10.jpg_Haemorrhagic_43.png,0,0,0.8398512601852417
+1,Shamshath,Hemorrhagic,Shamshath SWI-24.jpg_Haemorrhagic_57.png,0,0,0.8618699908256531
+1,Shamshath,Hemorrhagic,Shamshath SWI-6.jpg_Haemorrhagic_39.png,0,0,0.6752752661705017
+1,Poornima,NonHemorrhagic,Poornima DWI-10.jpg_Normal_20.png,1,1,0.2435498833656311
+1,Poornima,NonHemorrhagic,Poornima DWI-11.jpg_Normal_21.png,1,1,0.16915954649448395
+1,Poornima,NonHemorrhagic,Poornima DWI-12.jpg_Normal_22.png,1,1,0.07423253357410431
+1,Poornima,NonHemorrhagic,Poornima DWI-13.jpg_Normal_23.png,1,1,0.3306709825992584
+1,Poornima,NonHemorrhagic,Poornima DWI-14.jpg_Normal_24.png,1,1,0.038846906274557114
+1,Poornima,NonHemorrhagic,Poornima DWI-15.jpg_Normal_25.png,1,1,0.15401318669319153
+1,Poornima,NonHemorrhagic,Poornima DWI-16.jpg_Normal_26.png,1,1,0.15274842083454132
+1,Poornima,NonHemorrhagic,Poornima DWI-18.jpg_Normal_28.png,1,1,0.13417468965053558
+1,Poornima,NonHemorrhagic,Poornima DWI-19.jpg_Normal_29.png,1,1,0.329485684633255
+1,Poornima,NonHemorrhagic,Poornima DWI-20.jpg_Normal_30.png,1,1,0.32969993352890015
+1,Poornima,NonHemorrhagic,Poornima DWI-21.jpg_Normal_31.png,1,1,0.14896367490291595
+1,Poornima,NonHemorrhagic,Poornima DWI-22.jpg_Normal_32.png,1,1,0.0341000035405159
+1,Poornima,NonHemorrhagic,Poornima DWI-23.jpg_Normal_33.png,1,1,0.2709302604198456
+1,Poornima,NonHemorrhagic,Poornima DWI-8.jpg_Normal_18.png,1,1,0.09450112283229828
+1,Poornima,NonHemorrhagic,Poornima GRE-10.jpg_Normal_8.png,1,1,0.17941340804100037
+1,Poornima,NonHemorrhagic,Poornima GRE-11.jpg_Normal_9.png,1,1,0.2933832108974457
+1,Poornima,NonHemorrhagic,Poornima GRE-12.jpg_Normal_10.png,1,1,0.4105084538459778
+1,Poornima,NonHemorrhagic,Poornima GRE-14.jpg_Normal_12.png,1,1,0.45755982398986816
+1,Poornima,NonHemorrhagic,Poornima GRE-17.jpg_Normal_15.png,1,1,0.4673437774181366
+1,Poornima,NonHemorrhagic,Poornima GRE-18.jpg_Normal_16.png,1,1,0.4002961218357086
+1,Poornima,NonHemorrhagic,Poornima GRE-3.jpg_Normal_1.png,1,1,0.46012288331985474
+1,Poornima,NonHemorrhagic,Poornima GRE-4.jpg_Normal_2.png,1,1,0.4615086615085602
+1,Poornima,NonHemorrhagic,Poornima GRE-7.jpg_Normal_5.png,1,1,0.13679219782352448
+1,Poornima,NonHemorrhagic,Poornima GRE-8.jpg_Normal_6.png,1,1,0.2689615786075592
+1,Poornima,NonHemorrhagic,Poornima GRE-9.jpg_Normal_7.png,1,1,0.33884450793266296
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao DWI-10.jpg_Haemorrhagic_156.png,0,0,0.689324676990509
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao DWI-5.jpg_Haemorrhagic_151.png,0,0,0.7295066714286804
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao DWI-6.jpg_Haemorrhagic_152.png,0,0,0.8236494660377502
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao DWI-7.jpg_Haemorrhagic_153.png,0,0,0.79940265417099
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao DWI-9.jpg_Haemorrhagic_155.png,0,0,0.9198676347732544
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao GRE-3.jpg_Haemorrhagic_182.png,0,0,0.72739177942276
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao GRE-4.jpg_Haemorrhagic_183.png,0,1,0.4621124863624573
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao GRE-5.jpg_Haemorrhagic_184.png,0,0,0.7795725464820862
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao GRE-7.jpg_Haemorrhagic_186.png,0,0,0.7688555717468262
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao SWI-11.jpg_Haemorrhagic_157.png,0,1,0.38698068261146545
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao SWI-26.jpg_Haemorrhagic_172.png,0,0,0.9499989151954651
+2,Prabhakar Rao,Hemorrhagic,Prabhakar Rao SWI-27.jpg_Haemorrhagic_173.png,0,0,0.8990447521209717
+2,Pavithra,NonHemorrhagic,Pavithra DWI-10.jpg_Normal_74.png,1,1,0.012867683544754982
+2,Pavithra,NonHemorrhagic,Pavithra DWI-11.jpg_Normal_75.png,1,1,0.10918445885181427
+2,Pavithra,NonHemorrhagic,Pavithra DWI-12.jpg_Normal_76.png,1,1,0.030414989218115807
+2,Pavithra,NonHemorrhagic,Pavithra DWI-13.jpg_Normal_77.png,1,1,0.1671518236398697
+2,Pavithra,NonHemorrhagic,Pavithra DWI-15.jpg_Normal_79.png,1,1,0.04028620198369026
+2,Pavithra,NonHemorrhagic,Pavithra DWI-16.jpg_Normal_80.png,1,1,0.09705929458141327
+2,Pavithra,NonHemorrhagic,Pavithra DWI-17.jpg_Normal_81.png,1,1,0.15924064815044403
+2,Pavithra,NonHemorrhagic,Pavithra DWI-18.jpg_Normal_82.png,1,1,0.19601178169250488
+2,Pavithra,NonHemorrhagic,Pavithra DWI-19.jpg_Normal_83.png,1,1,0.07877711206674576
+2,Pavithra,NonHemorrhagic,Pavithra DWI-20.jpg_Normal_84.png,1,1,0.06615856289863586
+2,Pavithra,NonHemorrhagic,Pavithra DWI-22.jpg_Normal_86.png,1,1,0.08090589195489883
+2,Pavithra,NonHemorrhagic,Pavithra DWI-5.jpg_Normal_69.png,1,1,0.2864241898059845
+2,Pavithra,NonHemorrhagic,Pavithra DWI-6.jpg_Normal_70.png,1,1,0.06895340234041214
+2,Pavithra,NonHemorrhagic,Pavithra DWI-7.jpg_Normal_71.png,1,1,0.14179262518882751
+2,Pavithra,NonHemorrhagic,Pavithra DWI-8.jpg_Normal_72.png,1,1,0.13968172669410706
+2,Pavithra,NonHemorrhagic,Pavithra DWI-9.jpg_Normal_73.png,1,1,0.035994354635477066
+2,Pavithra,NonHemorrhagic,Pavithra GRE-10.jpg_Normal_93.png,1,1,0.13819903135299683
+2,Pavithra,NonHemorrhagic,Pavithra GRE-11.jpg_Normal_94.png,1,1,0.389091432094574
+2,Pavithra,NonHemorrhagic,Pavithra GRE-12.jpg_Normal_95.png,1,1,0.4552925229072571
+2,Pavithra,NonHemorrhagic,Pavithra GRE-13.jpg_Normal_96.png,1,1,0.3867652714252472
+2,Pavithra,NonHemorrhagic,Pavithra GRE-14.jpg_Normal_97.png,1,1,0.45587119460105896
+2,Pavithra,NonHemorrhagic,Pavithra GRE-16.jpg_Normal_99.png,1,1,0.25317564606666565
+2,Pavithra,NonHemorrhagic,Pavithra GRE-17.jpg_Normal_100.png,1,1,0.31409770250320435
+2,Pavithra,NonHemorrhagic,Pavithra GRE-18.jpg_Normal_101.png,1,1,0.33031436800956726
+2,Pavithra,NonHemorrhagic,Pavithra GRE-19.jpg_Normal_102.png,1,1,0.2764202654361725
+2,Pavithra,NonHemorrhagic,Pavithra GRE-4.jpg_Normal_87.png,1,1,0.2717781364917755
+2,Pavithra,NonHemorrhagic,Pavithra GRE-5.jpg_Normal_88.png,1,1,0.466392457485199
+2,Pavithra,NonHemorrhagic,Pavithra GRE-7.jpg_Normal_90.png,1,1,0.11527259647846222
+2,Pavithra,NonHemorrhagic,Pavithra GRE-8.jpg_Normal_91.png,1,1,0.48098453879356384
+2,Pavithra,NonHemorrhagic,Pavithra GRE-9.jpg_Normal_92.png,1,1,0.22995470464229584
+3,Manjula,Hemorrhagic,Manjula DWI-15.jpg_Haemorrhagic_108.png,0,1,0.2114473283290863
+3,Manjula,Hemorrhagic,Manjula DWI-17.jpg_Haemorrhagic_110.png,0,1,0.4760677218437195
+3,Manjula,Hemorrhagic,Manjula DWI-20.jpg_Haemorrhagic_113.png,0,1,0.469855934381485
+3,Manjula,Hemorrhagic,Manjula DWI-21.jpg_Haemorrhagic_114.png,0,0,0.5266294479370117
+3,Manjula,Hemorrhagic,Manjula DWI-22.jpg_Haemorrhagic_115.png,0,1,0.44292643666267395
+3,Manjula,Hemorrhagic,Manjula GRE-11.jpg_Haemorrhagic_101.png,0,1,0.2859601676464081
+3,Manjula,Hemorrhagic,Manjula GRE-12.jpg_Haemorrhagic_102.png,0,0,0.5785247087478638
+3,Manjula,Hemorrhagic,Manjula GRE-13.jpg_Haemorrhagic_103.png,0,0,0.6493148803710938
+3,Manjula,Hemorrhagic,Manjula GRE-15.jpg_Haemorrhagic_105.png,0,0,0.5593343377113342
+3,Manjula,Hemorrhagic,Manjula GRE-16.jpg_Haemorrhagic_106.png,0,1,0.3833222985267639
+3,Manjula,Hemorrhagic,Manjula GRE-17.jpg_Haemorrhagic_107.png,0,1,0.46102920174598694
+3,Manjula,Hemorrhagic,Manjula SWI-34.jpg_Haemorrhagic_116.png,0,0,0.7938477396965027
+3,Manjula,Hemorrhagic,Manjula SWI-67.jpg_Haemorrhagic_149.png,0,0,0.6962634325027466
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-10.jpg_Normal_324.png,1,1,0.27129247784614563
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-11.jpg_Normal_325.png,1,0,0.506401002407074
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-12.jpg_Normal_326.png,1,1,0.14223580062389374
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-13.jpg_Normal_327.png,1,1,0.04826277494430542
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-14.jpg_Normal_328.png,1,1,0.2298186868429184
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-16.jpg_Normal_330.png,1,1,0.2002241462469101
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-23.jpg_Normal_337.png,1,1,0.04566958546638489
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-24.jpg_Normal_338.png,1,1,0.10788698494434357
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-5.jpg_Normal_319.png,1,1,0.17897430062294006
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-6.jpg_Normal_320.png,1,1,0.15710599720478058
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-7.jpg_Normal_321.png,1,1,0.4672086238861084
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-8.jpg_Normal_322.png,1,1,0.4055645167827606
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi DWI-9.jpg_Normal_323.png,1,1,0.3472142815589905
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-10.jpg_Normal_311.png,1,1,0.359392911195755
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-11.jpg_Normal_312.png,1,1,0.18197140097618103
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-12.jpg_Normal_313.png,1,1,0.19741764664649963
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-13.jpg_Normal_314.png,1,1,0.13733623921871185
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-15.jpg_Normal_316.png,1,1,0.15694810450077057
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-16.jpg_Normal_317.png,1,1,0.22613370418548584
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-2.jpg_Normal_303.png,1,0,0.7895601987838745
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-3.jpg_Normal_304.png,1,0,0.6842084527015686
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-4.jpg_Normal_305.png,1,0,0.7714479565620422
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-5.jpg_Normal_306.png,1,0,0.8195639848709106
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-6.jpg_Normal_307.png,1,1,0.39987003803253174
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-7.jpg_Normal_308.png,1,0,0.626200795173645
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-8.jpg_Normal_309.png,1,1,0.13063226640224457
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi GRE-9.jpg_Normal_310.png,1,1,0.29953551292419434
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-10.jpg_Normal_396.png,1,0,0.8712058663368225
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-11.jpg_Normal_395.png,1,0,0.7920481562614441
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-15.jpg_Normal_391.png,1,0,0.8189188241958618
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-18.jpg_Normal_388.png,1,0,0.7247511744499207
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-20.jpg_Normal_386.png,1,0,0.514943540096283
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-21.jpg_Normal_385.png,1,1,0.4994375705718994
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-23.jpg_Normal_383.png,1,1,0.08684097975492477
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-24.jpg_Normal_382.png,1,1,0.34961941838264465
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-25.jpg_Normal_381.png,1,0,0.5889889597892761
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-27.jpg_Normal_379.png,1,0,0.7998051643371582
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-28.jpg_Normal_378.png,1,0,0.8389378190040588
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-38.jpg_Normal_368.png,1,0,0.6324392557144165
+3,Karnamoorthi,NonHemorrhagic,Karnamoorthi SWI-7.jpg_Normal_399.png,1,0,0.9419620037078857
+4,Kuppusamy,Hemorrhagic,Kuppusamy DWI-4.jpg_Haemorrhagic_1.png,0,0,0.8015987873077393
+4,Kuppusamy,Hemorrhagic,Kuppusamy DWI-5.jpg_Haemorrhagic_2.png,0,0,0.6925200819969177
+4,Kuppusamy,Hemorrhagic,Kuppusamy DWI-6.jpg_Haemorrhagic_3.png,0,0,0.8936240673065186
+4,Kuppusamy,Hemorrhagic,Kuppusamy DWI-7.jpg_Haemorrhagic_4.png,0,0,0.6891904473304749
+4,Kuppusamy,Hemorrhagic,Kuppusamy DWI-8.jpg_Haemorrhagic_5.png,0,0,0.8678452968597412
+4,Kuppusamy,Hemorrhagic,Kuppusamy DWI-9.jpg_Haemorrhagic_6.png,0,0,0.5913910865783691
+4,Kuppusamy,Hemorrhagic,Kuppusamy GRE-4.jpg_Haemorrhagic_25.png,0,0,0.8172558546066284
+4,Kuppusamy,Hemorrhagic,Kuppusamy GRE-5.jpg_Haemorrhagic_26.png,0,0,0.6658976078033447
+4,Kuppusamy,Hemorrhagic,Kuppusamy GRE-6.jpg_Haemorrhagic_27.png,0,0,0.6274732947349548
+4,Kuppusamy,Hemorrhagic,Kuppusamy GRE-7.jpg_Haemorrhagic_28.png,0,0,0.6429846286773682
+4,Kuppusamy,Hemorrhagic,Kuppusamy GRE-8.jpg_Haemorrhagic_29.png,0,0,0.542982816696167
+4,Kuppusamy,Hemorrhagic,Kuppusamy SWI-12.jpg_Haemorrhagic_7.png,0,0,0.8520618677139282
+4,Kuppusamy,Hemorrhagic,Kuppusamy SWI-16.jpg_Haemorrhagic_11.png,0,0,0.9288069009780884
+4,Kuppusamy,Hemorrhagic,Kuppusamy SWI-20.jpg_Haemorrhagic_15.png,0,0,0.9319865703582764
+4,Kuppusamy,Hemorrhagic,Kuppusamy SWI-25.jpg_Haemorrhagic_20.png,0,0,0.881930947303772
+4,Kuppusamy,Hemorrhagic,Kuppusamy SWI-29.jpg_Haemorrhagic_24.png,0,0,0.7744434475898743
+4,Chitra,NonHemorrhagic,Chitra DWI-10.jpg_Normal_121.png,1,1,0.06109749153256416
+4,Chitra,NonHemorrhagic,Chitra DWI-11.jpg_Normal_122.png,1,1,0.44804367423057556
+4,Chitra,NonHemorrhagic,Chitra DWI-12.jpg_Normal_123.png,1,1,0.24295181035995483
+4,Chitra,NonHemorrhagic,Chitra DWI-13.jpg_Normal_124.png,1,1,0.13282355666160583
+4,Chitra,NonHemorrhagic,Chitra DWI-14.jpg_Normal_125.png,1,1,0.23439383506774902
+4,Chitra,NonHemorrhagic,Chitra DWI-15.jpg_Normal_126.png,1,1,0.29591771960258484
+4,Chitra,NonHemorrhagic,Chitra DWI-16.jpg_Normal_127.png,1,1,0.10099545866250992
+4,Chitra,NonHemorrhagic,Chitra DWI-18.jpg_Normal_129.png,1,1,0.1814190000295639
+4,Chitra,NonHemorrhagic,Chitra DWI-22.jpg_Normal_133.png,1,1,0.17416152358055115
+4,Chitra,NonHemorrhagic,Chitra DWI-23.jpg_Normal_134.png,1,1,0.14842094480991364
+4,Chitra,NonHemorrhagic,Chitra DWI-24.jpg_Normal_135.png,1,1,0.1460258662700653
+4,Chitra,NonHemorrhagic,Chitra DWI-6.jpg_Normal_117.png,1,1,0.18914726376533508
+4,Chitra,NonHemorrhagic,Chitra DWI-7.jpg_Normal_118.png,1,1,0.15588268637657166
+4,Chitra,NonHemorrhagic,Chitra DWI-8.jpg_Normal_119.png,1,0,0.5172648429870605
+4,Chitra,NonHemorrhagic,Chitra DWI-9.jpg_Normal_120.png,1,1,0.16998399794101715
+4,Chitra,NonHemorrhagic,Chitra GRE-10.jpg_Normal_109.png,1,1,0.29170405864715576
+4,Chitra,NonHemorrhagic,Chitra GRE-13.jpg_Normal_112.png,1,1,0.298144668340683
+4,Chitra,NonHemorrhagic,Chitra GRE-14.jpg_Normal_113.png,1,1,0.335039883852005
+4,Chitra,NonHemorrhagic,Chitra GRE-15.jpg_Normal_114.png,1,0,0.5034685134887695
+4,Chitra,NonHemorrhagic,Chitra GRE-17.jpg_Normal_116.png,1,1,0.2968588173389435
+4,Chitra,NonHemorrhagic,Chitra GRE-4.jpg_Normal_103.png,1,1,0.49429064989089966
+4,Chitra,NonHemorrhagic,Chitra GRE-5.jpg_Normal_104.png,1,1,0.14432580769062042
+4,Chitra,NonHemorrhagic,Chitra GRE-6.jpg_Normal_105.png,1,1,0.17699286341667175
+4,Chitra,NonHemorrhagic,Chitra GRE-7.jpg_Normal_106.png,1,1,0.202997624874115
+4,Chitra,NonHemorrhagic,Chitra GRE-9.jpg_Normal_108.png,1,1,0.2294483184814453
+4,Chitra,NonHemorrhagic,Chitra SWI-10.jpg_Normal_194.png,1,0,0.6088535785675049
+4,Chitra,NonHemorrhagic,Chitra SWI-16.jpg_Normal_188.png,1,0,0.7192310094833374
+4,Chitra,NonHemorrhagic,Chitra SWI-24.jpg_Normal_180.png,1,0,0.7414827346801758
+4,Chitra,NonHemorrhagic,Chitra SWI-5.jpg_Normal_199.png,1,0,0.9394594430923462
