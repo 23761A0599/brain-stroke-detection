@@ -9,14 +9,14 @@ import cv2
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-# --- ADDED LINE 1: Import the new router ---
+# Import the new router
 from routes.predict import router as predict_router
 
 from model.config import IMAGE_SIZE, CLASS_NAMES, DEVICE
-from model.model_builder import build_model
 from services.gradcam import generate_gradcam_map
 from services.gradcam_pro import generate_gradcam_images
 from services.lime_explainer import save_lime_explanation
+from services.predictor import model  # Import shared model instance
 
 app = FastAPI(title="Brain Hemorrhage Detection API")
 
@@ -28,39 +28,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- ADDED LINE 2: Register the new router ---
+# Register the router
 app.include_router(predict_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-POSSIBLE_PATHS = [
-    os.path.join(BASE_DIR, "models", "EfficientNetB0", "best_efficientnetb0.pth"),
-    os.path.join(BASE_DIR, "backend", "models", "EfficientNetB0", "best_efficientnetb0.pth"),
-    os.path.join(BASE_DIR, "models", "best_efficientnetb0.pth"),
-    os.path.join(BASE_DIR, "backend", "models", "best_efficientnetb0.pth"),
-    "models/EfficientNetB0/best_efficientnetb0.pth",
-    "backend/models/EfficientNetB0/best_efficientnetb0.pth",
-]
-
-MODEL_PATH = None
-for p in POSSIBLE_PATHS:
-    if os.path.exists(p):
-        MODEL_PATH = p
-        break
-
-model = None
-if MODEL_PATH:
-    try:
-        model = build_model("efficientnetb0")
-        state_dict = torch.load(MODEL_PATH, map_location=DEVICE)
-        model.load_state_dict(state_dict)
-        model.to(DEVICE)
-        model.eval()
-        print(f"Model loaded successfully from: {MODEL_PATH}", flush=True)
-    except Exception as e:
-        print(f"Error loading model from {MODEL_PATH}: {e}", flush=True)
-        model = None
-else:
-    print(f"Model file not found in any expected location: {POSSIBLE_PATHS}", flush=True)
 
 transform = transforms.Compose([
     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
@@ -94,32 +65,14 @@ def looks_like_mri(pil_image,
                    midtone_low=15,
                    midtone_high=235,
                    max_aspect_ratio=1.25):
-    """
-    Sanity filter to reject non-MRI uploads:
-    1. Colorfulness  - rejects colorful photos, posters, product shots
-    2. Brightness     - rejects bright documents/photos
-    3. Midtone spread - rejects flat two-tone UI screenshots/text
-    4. Aspect ratio   - real MRI scan exports are roughly SQUARE
-                        (e.g. 256x256). Phone photos of documents,
-                        notebooks, posters, and screenshots are almost
-                        always tall rectangles, since that's how phone
-                        cameras and screens are shaped. This is the
-                        single strongest signal for the cases seen so
-                        far and catches what texture/color checks miss.
-    Not a perfect MRI detector - a practical filter against the
-    realistic wrong uploads people are likely to try. If you later
-    get genuine non-square MRI exports, raise max_aspect_ratio.
-    """
     np_img = np.array(pil_image).astype(np.float32)
     gray = np.array(pil_image.convert("L")).astype(np.float32)
     h, w = gray.shape
 
-    # --- 1. Aspect ratio (checked first - cheapest, strongest signal) ---
     aspect_ratio = max(h, w) / min(h, w)
     if aspect_ratio > max_aspect_ratio:
         return False
 
-    # --- 2. Colorfulness ---
     if np_img.ndim == 3 and np_img.shape[2] >= 3:
         r, g, b = np_img[..., 0], np_img[..., 1], np_img[..., 2]
         rg = np.abs(r - g)
@@ -129,11 +82,9 @@ def looks_like_mri(pil_image,
         if colorfulness >= colorfulness_threshold:
             return False
 
-    # --- 3. Overall brightness ---
     if gray.mean() > overall_brightness_threshold:
         return False
 
-    # --- 4. Midtone spread ---
     midtone_ratio = np.mean((gray >= midtone_low) & (gray <= midtone_high))
     if midtone_ratio < min_midtone_ratio:
         return False
