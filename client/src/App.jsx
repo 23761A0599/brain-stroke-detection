@@ -84,13 +84,40 @@ function AppContent() {
   const hemorrhagicPct = parsePercent(result?.hemorrhage_confidence);
   const nonHemorrhagicPct = parsePercent(result?.normal_confidence);
 
+  // Explanation cards: shown for every prediction (the maps explain the predicted class).
+  const explanationCards = result
+    ? [
+        {
+          title: "Grad-CAM",
+          src: result.gradcam,
+          err: result.explanation_errors?.gradcam,
+          desc: "Highlights the MRI regions that contributed most to the model's prediction.",
+        },
+        {
+          title: "Grad-CAM++",
+          src: result.pro_gradcam || result.gradcam_pro,
+          err: result.explanation_errors?.gradcam_pro,
+          desc: "Refined map using second- and third-order gradients; boxes mark regions above 50% of the peak and appear only for a hemorrhagic prediction.",
+        },
+        {
+          title: "LIME",
+          src: result.lime,
+          err: result.explanation_errors?.lime,
+          desc:
+            result.lime_r2 !== undefined && result.lime_r2 !== null
+              ? `Superpixels that most supported the prediction (local surrogate fit R\u00b2 = ${result.lime_r2}).`
+              : "Superpixels that most supported the prediction.",
+        },
+      ]
+    : [];
+
   return (
     <div style={styles.appWrapper}>
       <header style={styles.header}>
         <h1 style={styles.headerTitle}>Brain Hemorrhage Detection System</h1>
         <p style={styles.headerSubtitle}>
           Deep learning-based MRI analysis using EfficientNet-B0 &middot; FastAPI
-          &middot; React &middot; Grad-CAM &middot; LIME explainability
+          &middot; React &middot; Grad-CAM &middot; Grad-CAM++ &middot; LIME explainability
         </p>
       </header>
 
@@ -122,9 +149,6 @@ function AppContent() {
               </p>
               <p style={styles.infoBoldValue}>
                 D. Kowshik Reddy &nbsp;&middot;&nbsp; 23761A0584
-              </p>
-              <p style={styles.infoBoldValue}>
-                Sh. Thasleem &nbsp;&middot;&nbsp; 23761A05C2
               </p>
 
               <div style={{ marginTop: "16px" }}>
@@ -170,7 +194,7 @@ function AppContent() {
                     cursor: loading || !selectedFile ? "not-allowed" : "pointer",
                   }}
                 >
-                  {loading ? "Analyzing MRI..." : "Predict"}
+                  {loading ? "Analyzing MRI (explanations can take a few seconds)..." : "Predict"}
                 </button>
 
                 {(selectedFile || result) && (
@@ -265,7 +289,7 @@ function AppContent() {
 
         {result && (
           <section style={styles.card}>
-            <h2 style={styles.cardTitle}>Medical Interpretation</h2>
+            <h2 style={styles.cardTitle}>Model Interpretation</h2>
             <div style={styles.interpretationText}>
               <p>
                 <strong>Prediction:</strong> {result.prediction}
@@ -277,109 +301,77 @@ function AppContent() {
               {isHemorrhagic ? (
                 <>
                   <p>
-                    The uploaded MRI scan has been classified as{" "}
+                    The model classified the uploaded MRI scan as{" "}
                     <strong>Hemorrhagic</strong> with a confidence score of{" "}
                     <strong>{mainConfidence.toFixed(2)}%</strong>.
                   </p>
                   <p>
-                    The <strong>Grad-CAM</strong> visualization highlights the
-                    image regions that most influenced the model's prediction.
-                  </p>
-                  <p>
-                    The <strong>Professional Grad-CAM</strong> provides an
-                    enhanced visualization of the region that contributed most
-                    strongly to the classification.
-                  </p>
-                  <p>
-                    The <strong>LIME explanation</strong> identifies the local
-                    image features that had the greatest influence on the
-                    prediction.
+                    The <strong>Grad-CAM</strong> and <strong>Grad-CAM++</strong>{" "}
+                    maps highlight the image regions that most influenced this
+                    prediction, and the <strong>LIME</strong> overlay marks the
+                    superpixels that most supported it. These maps show what the
+                    model used; they are not clinical findings and may fall
+                    outside the actual lesion.
                   </p>
                 </>
               ) : (
                 <>
                   <p>
-                    The uploaded MRI scan shows no visual indicators consistent
-                    with hemorrhage, and has been classified as{" "}
+                    The model classified this scan as{" "}
                     <strong>NonHemorrhagic</strong> with a confidence score of{" "}
                     <strong>{mainConfidence.toFixed(2)}%</strong>.
                   </p>
                   <p>
-                    <strong>Estimated hemorrhage likelihood:</strong>{" "}
+                    <strong>Estimated hemorrhage probability:</strong>{" "}
                     {hemorrhagicPct.toFixed(2)}%
                   </p>
                   <p>
-                    This is a low estimated likelihood based on the model's
-                    analysis of this single scan, not a clinical risk prediction
-                    for future events.
+                    This is a model output for a single image, not a diagnosis.
+                    The model can miss hemorrhages, so every scan should be
+                    reviewed by a qualified clinician.
                   </p>
                 </>
               )}
 
               <div style={styles.disclaimerBox}>
-                <strong>Note:</strong> This application is intended for educational
-                and research purposes. The predictions should support, not replace,
-                clinical judgment by qualified healthcare professionals.
+                <strong>Note:</strong> This application is a research prototype
+                intended for educational and research purposes. Predictions
+                should support, not replace, clinical judgment by qualified
+                healthcare professionals.
               </div>
             </div>
           </section>
         )}
 
-        {result && isHemorrhagic && (
+        {result && (
           <section style={styles.card}>
             <h2 style={styles.cardTitle}>Model Explainability</h2>
+            <p style={styles.explainNote}>
+              Maps explain the predicted class (
+              {result.explained_class || result.prediction}). They show what the
+              model used, not clinical findings.
+            </p>
 
             <div style={styles.explainabilityGrid}>
-              <div style={styles.explainCard}>
-                <h4 style={styles.explainCardTitle}>Grad-CAM</h4>
-                {resolveImageUrl(result.gradcam) ? (
-                  <img
-                    src={resolveImageUrl(result.gradcam)}
-                    alt="Grad-CAM"
-                    style={styles.explainImage}
-                  />
-                ) : (
-                  <p style={styles.missingImageText}>Grad-CAM image unavailable</p>
-                )}
-                <p style={styles.explainDesc}>
-                  Highlights the MRI regions that contributed most to the model's
-                  prediction.
-                </p>
-              </div>
-
-              <div style={styles.explainCard}>
-                <h4 style={styles.explainCardTitle}>Professional Grad-CAM</h4>
-                {resolveImageUrl(result.pro_gradcam) ? (
-                  <img
-                    src={resolveImageUrl(result.pro_gradcam)}
-                    alt="Professional Grad-CAM"
-                    style={styles.explainImage}
-                  />
-                ) : (
-                  <p style={styles.missingImageText}>Professional Grad-CAM image unavailable</p>
-                )}
-                <p style={styles.explainDesc}>
-                  Provides a refined visualization of the important regions used by
-                  the deep learning model.
-                </p>
-              </div>
-
-              <div style={styles.explainCard}>
-                <h4 style={styles.explainCardTitle}>LIME Explanation</h4>
-                {resolveImageUrl(result.lime) ? (
-                  <img
-                    src={resolveImageUrl(result.lime)}
-                    alt="LIME Explanation"
-                    style={styles.explainImage}
-                  />
-                ) : (
-                  <p style={styles.missingImageText}>LIME image unavailable</p>
-                )}
-                <p style={styles.explainDesc}>
-                  Explains the local image features that influenced the final
-                  classification decision.
-                </p>
-              </div>
+              {explanationCards.map((m) => (
+                <div key={m.title} style={styles.explainCard}>
+                  <h4 style={styles.explainCardTitle}>{m.title}</h4>
+                  {resolveImageUrl(m.src) ? (
+                    <img
+                      src={resolveImageUrl(m.src)}
+                      alt={m.title}
+                      style={styles.explainImage}
+                    />
+                  ) : (
+                    <p style={styles.missingImageText}>
+                      {m.err
+                        ? `${m.title} could not be generated: ${m.err}`
+                        : `${m.title} image unavailable`}
+                    </p>
+                  )}
+                  <p style={styles.explainDesc}>{m.desc}</p>
+                </div>
+              ))}
             </div>
           </section>
         )}
@@ -389,11 +381,11 @@ function AppContent() {
         <h3 style={styles.footerTitle}>Brain Hemorrhage Detection System</h3>
         <p style={styles.footerSubText}>
           Deep learning-based MRI analysis using EfficientNet-B0 with explainable
-          AI (Grad-CAM & LIME)
+          AI (Grad-CAM, Grad-CAM++ & LIME)
         </p>
         <hr style={styles.footerLine} />
         <p style={styles.footerCredits}>
-          Developed by K. Subba Rao, D. Kowshik Reddy & Sh. Thasleem
+          Developed by K. Subba Rao & D. Kowshik Reddy
         </p>
         <p style={styles.footerCredits}>
           Department of Computer Science and Engineering
@@ -632,6 +624,12 @@ const styles = {
     borderRadius: "6px",
     fontSize: "12px",
     color: "#1e3a8a",
+  },
+  explainNote: {
+    fontSize: "12px",
+    color: "#475569",
+    textAlign: "center",
+    margin: "-8px 0 18px 0",
   },
   explainabilityGrid: {
     display: "grid",
