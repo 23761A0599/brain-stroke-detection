@@ -9,6 +9,9 @@ import cv2
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+# --- ADDED LINE 1: Import the new router ---
+from routes.predict import router as predict_router
+
 from model.config import IMAGE_SIZE, CLASS_NAMES, DEVICE
 from model.model_builder import build_model
 from services.gradcam import generate_gradcam_map
@@ -24,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- ADDED LINE 2: Register the new router ---
+app.include_router(predict_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 POSSIBLE_PATHS = [
@@ -82,12 +88,12 @@ def file_to_data_url(path):
         return ""
 
 def looks_like_mri(pil_image,
-                    colorfulness_threshold=15,
-                    overall_brightness_threshold=195,
-                    min_midtone_ratio=0.15,
-                    midtone_low=15,
-                    midtone_high=235,
-                    max_aspect_ratio=1.25):
+                   colorfulness_threshold=15,
+                   overall_brightness_threshold=195,
+                   min_midtone_ratio=0.15,
+                   midtone_low=15,
+                   midtone_high=235,
+                   max_aspect_ratio=1.25):
     """
     Sanity filter to reject non-MRI uploads:
     1. Colorfulness  - rejects colorful photos, posters, product shots
@@ -135,7 +141,7 @@ def looks_like_mri(pil_image,
     return True
 
 
-@app.post("/predict")
+@app.post("/predict-legacy")
 async def predict(file: UploadFile = File(...)):
     print("\n--- PREDICT ENDPOINT TRIGGERED ---", flush=True)
 
