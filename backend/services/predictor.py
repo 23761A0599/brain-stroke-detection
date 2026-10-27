@@ -30,7 +30,7 @@ from pathlib import Path
 
 from model.config import CLASS_NAMES, DEVICE, IMAGE_SIZE, MODELS_DIR
 from services import explainers as E
-from services.predictor import model          # loaded EfficientNet-B0 (eval mode)
+from services import predictor          # loaded EfficientNet-B0 (eval mode)
 
 router = APIRouter()
 HEM_IDX = CLASS_NAMES.index("Hemorrhagic")
@@ -68,7 +68,7 @@ def explain_check():
         try:
             m = __import__(name)
             info[name] = getattr(m, "__version__", "ok")
-        except Exception as e:                       # pragma: no cover
+        except Exception as e:                 # pragma: no cover
             info[name] = f"MISSING: {e}"
     return info
 
@@ -85,14 +85,14 @@ def predict(file: UploadFile = File(...), lime_samples: int = LIME_SAMPLES_DEFAU
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         img = np.array(Image.fromarray(rgb).resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR))
         x = _to_tensor(img)
-        model.eval()
+        predictor.model.eval()
         with torch.no_grad():
-            probs = torch.softmax(model(x), dim=1)[0].cpu().numpy()
+            probs = torch.softmax(predictor.model(x), dim=1)[0].cpu().numpy()
         pred = int(probs.argmax())
         conf = float(probs[pred])
         result = {
             "prediction": CLASS_NAMES[pred],
-            "confidence": round(conf * 100, 2),                        # percent, as App.jsx expects
+            "confidence": round(conf * 100, 2),                    # percent, as App.jsx expects
             "confidence_percentage": f"{conf * 100:.2f}%",
             "hemorrhage_confidence": round(float(probs[HEM_IDX]) * 100, 2),
             "normal_confidence": round(float(probs[NON_IDX]) * 100, 2),
@@ -109,21 +109,21 @@ def predict(file: UploadFile = File(...), lime_samples: int = LIME_SAMPLES_DEFAU
     errors = {}
     cam_pp = None
     try:
-        cam_g, _, _ = E.compute_cam(model, x, "gradcam")
+        cam_g, _, _ = E.compute_cam(predictor.model, x, "gradcam")
         result["gradcam"] = _data_uri(E.overlay_heatmap(img, cam_g))
     except Exception as e:
         errors["gradcam"] = repr(e)
     try:
-        cam_pp, _, _ = E.compute_cam(model, x, "gradcam++")
+        cam_pp, _, _ = E.compute_cam(predictor.model, x, "gradcam++")
         over = E.overlay_heatmap(img, cam_pp)
-        if pred == HEM_IDX:                           # region boxes only for a hemorrhage prediction
+        if pred == HEM_IDX:                          # region boxes only for a hemorrhage prediction
             over, _ = E.draw_regions(over, cam_pp, thr=0.5)
         result["pro_gradcam"] = result["gradcam_pro"] = _data_uri(over)   # Grad-CAM++ (key names used by App.jsx and by the API)
     except Exception as e:
         errors["gradcam_pro"] = repr(e)
     try:
         n = max(50, min(int(lime_samples), 1000))
-        lime = E.lime_image(E.make_predict_fn(model, DEVICE, batch=16), img, pred, n_samples=n)
+        lime = E.lime_image(E.make_predict_fn(predictor.model, DEVICE, batch=16), img, pred, n_samples=n)
         result["lime"] = _data_uri(E.overlay_lime(img, lime["segments"], lime["coef"], top_k=5))
         result["lime_r2"] = round(float(lime["r2"]), 3)
     except Exception as e:
