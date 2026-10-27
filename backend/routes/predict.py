@@ -1,111 +1,102 @@
+import base64
 import io
 import os
-import base64
+import threading
+import traceback
+
+import cv2
+import numpy as np
 import torch
 import torchvision.transforms as transforms
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from PIL import Image
-import numpy as np
-import cv2
-from fastapi import APIRouter, File, UploadFile, HTTPException
 
-from model.config import IMAGE_SIZE, CLASS_NAMES, DEVICE
+from model.config import CLASS_NAMES, DEVICE, IMAGE_SIZE
 from services.predictor import model
-from services.gradcam import generate_gradcam_map
-from services.gradcam_pro import generate_gradcam_images
-from services.lime_explainer import save_lime_explanation
+from services.explainers import (
+    HEM_IDX, compute_cam, make_predict_fn, lime_image, overlay_heatmap,
+    draw_regions, overlay_lime, deletion_curve, deletion_auc,
+    background_attention_fraction,
+)
 
 router = APIRouter()
 
-transform = transforms.Compose([
-    transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+# 800 matches the training figure; lower it on Render's free tier if requests time out
+LIME_SAMPLES = int(os.getenv("LIME_SAMPLES", "400"))
+LIME_SEGMENTS = int(os.getenv("LIME_SEGMENTS", "40"))
+
+resize = transforms.Resize((IMAGE_SIZE, IMAGE_SIZE))
+to_input = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-BASE_DIR = Path(__file__).resolve().parent.parent if 'Path' in globals() else os.path.dirname(os.path.abspath(__file__))
-if not isinstance(BASE_DIR, str):
-    BASE_DIR = str(BASE_DIR.parent if hasattr(BASE_DIR, 'parent') else BASE_DIR)
+# the explainers hook a shared model layer, so only one request may run at a time
+_lock = threading.Lock()
 
-def file_to_data_url(path):
-    if not path or not os.path.exists(path):
+
+def to_data_url(rgb):
+    ok, buf = cv2.imencode(".png", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+    if not ok:
         return ""
-    try:
-        with open(path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
-        return f"data:image/png;base64,{encoded}"
-    except Exception as e:
-        print(f"Base64 encoding error: {e}", flush=True)
-        return ""
+    return "data:image/png;base64," + base64.b64encode(buf.tobytes()).decode("utf-8")
+
 
 @router.post("/predict")
-async def predict_endpoint(file: UploadFile = File(...)):
-    print("\n--- API /predict ROUTE TRIGGERED ---", flush=True)
+def predict_endpoint(file: UploadFile = File(...)):   # plain def: FastAPI runs it in a thread
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model is not loaded on the server.")
     try:
-        contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert("RGB")
-        
-        # Save temp file for LIME
-        temp_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
-        os.makedirs(temp_dir, exist_ok=True)
-        temp_path = os.path.join(temp_dir, file.filename)
-        with open(temp_path, "wb") as f:
-            f.write(contents)
+        image = Image.open(io.BytesIO(file.file.read())).convert("RGB")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file.")
 
-        if model is None:
-            raise HTTPException(status_code=500, detail="Model is not loaded on the server.")
+    resized = resize(image)
+    img_rgb = np.array(resized)                        # uint8 RGB, what LIME perturbs
+    x = to_input(resized).unsqueeze(0).to(DEVICE)
 
-        input_tensor = transform(image).unsqueeze(0).to(DEVICE)
+    result = {"gradcam": "", "pro_gradcam": "", "lime": ""}
+    metrics, errors = {}, {}
 
-        # Grad-CAM map
-        try:
-            cam_map, _ = generate_gradcam_map(model, input_tensor)
-        except Exception as e:
-            print(f"Grad-CAM map error: {e}", flush=True)
-            cam_map = None
-
-        # Prediction
+    with _lock:
         with torch.no_grad():
-            outputs = model(input_tensor)
-            probabilities = torch.softmax(outputs, dim=1)
-            hemorrhagic_prob = probabilities[0][0].item() * 100
-            nonhemorrhagic_prob = probabilities[0][1].item() * 100
-            confidence_val, predicted_idx = torch.max(probabilities, 1)
-            prediction_label = CLASS_NAMES[predicted_idx.item()]
-            confidence_str = f"{confidence_val.item() * 100:.2f}%"
+            probs = torch.softmax(model(x), dim=1)[0]
+        pred = int(probs.argmax())
+        conf = float(probs[pred])
+        predict_fn = make_predict_fn(model, DEVICE)
 
-        # Generate Visualizations
-        np_img = np.array(image)
-        orig_bgr = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
-        
-        gradcam_b64, pro_gradcam_b64, lime_b64 = "", "", ""
-        try:
-            result_paths = generate_gradcam_images(
-                orig_bgr, cam_map,
-                confidence_score=confidence_val.item(),
-                class_name=prediction_label
-            )
-            gradcam_b64 = file_to_data_url(result_paths.get("gradcam", ""))
-            pro_gradcam_b64 = file_to_data_url(result_paths.get("gradcam_pro", ""))
+        try:   # 1. Grad-CAM: full continuous map
+            cam_g, _, _ = compute_cam(model, x, "gradcam", target_class=pred, size=IMAGE_SIZE)
+            result["gradcam"] = to_data_url(overlay_heatmap(img_rgb, cam_g))
         except Exception as e:
-            print(f"Grad-CAM visualization error: {e}", flush=True)
+            errors["gradcam"] = str(e); traceback.print_exc()
 
-        try:
-            lime_result = save_lime_explanation(
-                temp_path, cam_map, confidence_val.item(), prediction_label
-            )
-            lime_b64 = file_to_data_url(lime_result.get("lime_path", ""))
+        try:   # 2. Grad-CAM++: heatmap + box (>= 50% of peak), boxes only for hemorrhagic
+            cam_pp, _, _ = compute_cam(model, x, "gradcam++", target_class=pred, size=IMAGE_SIZE)
+            img_pp = overlay_heatmap(img_rgb, cam_pp)
+            if pred == HEM_IDX:
+                img_pp, _ = draw_regions(img_pp, cam_pp, thr=0.5)
+            result["pro_gradcam"] = to_data_url(img_pp)
+            metrics["background_attention"] = background_attention_fraction(cam_pp, img_rgb)
+            fr, p = deletion_curve(predict_fn, img_rgb, cam_pp, pred)
+            metrics["deletion_auc"] = deletion_auc(fr, p)
         except Exception as e:
-            print(f"LIME error: {e}", flush=True)
+            errors["gradcam_pp"] = str(e); traceback.print_exc()
 
-        return {
-            "prediction": prediction_label,
-            "confidence": confidence_str,
-            "hemorrhage_confidence": f"{hemorrhagic_prob:.2f}%",
-            "normal_confidence": f"{nonhemorrhagic_prob:.2f}%",
-            "gradcam": gradcam_b64,
-            "pro_gradcam": pro_gradcam_b64,
-            "lime": lime_b64
-        }
-    except Exception as e:
-        print(f"Prediction route exception: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        try:   # 3. Real LIME: superpixels, perturbations, weighted ridge surrogate
+            res = lime_image(predict_fn, img_rgb, pred,
+                             n_samples=LIME_SAMPLES, n_segments=LIME_SEGMENTS)
+            result["lime"] = to_data_url(overlay_lime(img_rgb, res["segments"], res["coef"]))
+            metrics["lime_r2"] = res["r2"]
+        except Exception as e:
+            errors["lime"] = str(e); traceback.print_exc()
+
+    return {
+        "prediction": CLASS_NAMES[pred],
+        "confidence": f"{conf * 100:.2f}%",
+        "hemorrhage_confidence": f"{float(probs[0]) * 100:.2f}%",
+        "normal_confidence": f"{float(probs[1]) * 100:.2f}%",
+        **result,
+        "explanation_metrics": metrics,
+        "explanation_errors": errors,
+    }
