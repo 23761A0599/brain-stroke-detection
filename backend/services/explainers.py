@@ -71,7 +71,7 @@ def compute_cam(model, x, method="gradcam", target_class=None, layer=None, size=
     return cam, pred, probs
 
 
-def make_predict_fn(model, device, batch=64):
+def make_predict_fn(model, device, batch=8):
     """uint8 RGB batch (N,H,W,3) -> softmax probabilities (N,2); same normalisation as training."""
     import torch
     mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
